@@ -1,14 +1,14 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect
 import sqlite3
 import os
 
 app = Flask(__name__)
 
-# 📁 DATABASE PATH (IMPORTANT FOR DEPLOYMENT)
+# 📁 DATABASE PATH
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_path = os.path.join(BASE_DIR, 'database.db')
 
-# 🧠 AUTO CATEGORY FUNCTION
+# 🧠 AUTO CATEGORY
 def auto_category(desc):
     desc = desc.lower()
 
@@ -27,31 +27,27 @@ def auto_category(desc):
     else:
         return "Other"
 
-# 🤖 AI INSIGHTS FUNCTION
+# 🤖 AI INSIGHTS
 def generate_insights(transactions, income, expenses, category_data):
     insights = []
 
-    # ⚖️ Balance warning
     if expenses > income:
         insights.append("⚠️ Your expenses are higher than your income!")
 
-    # 🍔 Category warnings
     total_spent = sum(category_data.values())
 
     for category, amount in category_data.items():
         if total_spent > 0:
             percent = (amount / total_spent) * 100
-
             if percent > 40:
                 insights.append(f"⚠️ You are spending a lot on {category} ({percent:.1f}%)")
 
-    # 🪙 Crypto insight
     if "Crypto" in category_data and category_data["Crypto"] > 0:
         insights.append("🪙 You are actively investing in crypto")
 
     return insights
 
-# 🗄️ DATABASE SETUP
+# 🗄️ INIT DATABASE
 def init_db():
     conn = sqlite3.connect(db_path)
     conn.execute('''
@@ -77,7 +73,6 @@ def index():
         source = request.form['source']
         desc = request.form['description']
 
-        # 🧠 AUTO CATEGORY
         category = request.form['category'] or auto_category(desc)
 
         conn.execute(
@@ -86,18 +81,14 @@ def index():
         )
         conn.commit()
 
-    # 📥 FETCH DATA
     transactions = conn.execute("SELECT * FROM transactions").fetchall()
     conn.close()
 
-    # 📊 CALCULATIONS
     income = sum(t[1] for t in transactions if t[2] == "income")
     expenses = sum(t[1] for t in transactions if t[2] == "expense")
     balance = income - expenses
 
-    # 📊 CATEGORY DATA
     category_data = {}
-
     for t in transactions:
         category = t[3]
         amount = t[1]
@@ -107,7 +98,6 @@ def index():
         else:
             category_data[category] = amount
 
-    # 🤖 GENERATE INSIGHTS
     insights = generate_insights(transactions, income, expenses, category_data)
 
     return render_template(
@@ -120,7 +110,16 @@ def index():
         insights=insights
     )
 
-# ▶️ RUN APP
+# 🗑️ CLEAR DATA ROUTE (NEW)
+@app.route('/clear', methods=['POST'])
+def clear_data():
+    conn = sqlite3.connect(db_path)
+    conn.execute("DELETE FROM transactions")
+    conn.commit()
+    conn.close()
+    return redirect('/')
+
+# ▶️ RUN
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)

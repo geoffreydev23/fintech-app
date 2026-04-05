@@ -2,13 +2,9 @@
 <html>
 <head>
     <title>Fintech App</title>
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- 📱 PWA Manifest -->
     <link rel="manifest" href="/static/manifest.json">
-
-    <!-- 📊 Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -18,10 +14,6 @@
             color: white;
             margin: 0;
             padding: 20px;
-        }
-
-        h1 {
-            text-align: center;
         }
 
         .container {
@@ -53,29 +45,16 @@
             border-radius: 5px;
         }
 
-        .summary {
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-
-        .chart-container {
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-
-        .transactions {
-            margin-top: 20px;
-        }
-
-        .card {
-            background: #1e293b;
-            padding: 10px;
+        .danger {
+            background: red;
             margin-top: 10px;
+        }
+
+        .summary, .chart-container, .card {
+            background: #1e293b;
+            padding: 15px;
             border-radius: 10px;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -85,34 +64,24 @@
 
     <h1>💰 Smart Finance Tracker</h1>
 
-    <!-- 📊 SUMMARY -->
     <div class="summary">
-        <h3>📊 Summary</h3>
-        <p>💰 Income: Ksh {{income}}</p>
-        <p>💸 Expenses: Ksh {{expenses}}</p>
-        <p>⚖️ Balance: Ksh {{balance}}</p>
+        <p>Income: Ksh {{income}}</p>
+        <p>Expenses: Ksh {{expenses}}</p>
+        <p>Balance: Ksh {{balance}}</p>
     </div>
 
-    <!-- 📊 CHART -->
     <div class="chart-container">
-        <h3>📊 Spending Breakdown</h3>
         <canvas id="myChart"></canvas>
     </div>
 
-    <!-- 🤖 AI INSIGHTS -->
     <div class="summary">
         <h3>🤖 AI Insights</h3>
-
-        {% if insights %}
-            {% for insight in insights %}
-                <p>{{insight}}</p>
-            {% endfor %}
-        {% else %}
-            <p>No insights yet</p>
-        {% endif %}
+        {% for insight in insights %}
+            <p>{{insight}}</p>
+        {% endfor %}
     </div>
 
-    <!-- 📝 FORM -->
+    <!-- ADD TRANSACTION -->
     <form method="POST">
         <input name="amount" placeholder="Amount" required>
 
@@ -121,40 +90,34 @@
             <option value="income">Income</option>
         </select>
 
-        <input name="category" placeholder="Category (leave blank for auto)">
-
-        <input name="source" placeholder="Source (mpesa, crypto, bank)">
-
+        <input name="category" placeholder="Category (optional)">
+        <input name="source" placeholder="Source">
         <input name="description" placeholder="Description">
 
         <button type="submit">Add Transaction</button>
     </form>
 
-    <!-- 📋 TRANSACTIONS -->
-    <div class="transactions">
-        <h2>Transactions</h2>
+    <!-- 🗑️ CLEAR BUTTON (NEW) -->
+    <form method="POST" action="/clear">
+        <button class="danger">🗑️ Clear All Data</button>
+    </form>
 
-        {% for t in transactions %}
-            <div class="card">
-                <strong>Ksh {{t[1]}}</strong><br>
-                {{t[2]}} | {{t[3]}}<br>
-                {{t[5]}}
-            </div>
-        {% endfor %}
-    </div>
+    <h2>Transactions</h2>
+
+    {% for t in transactions %}
+        <div class="card">
+            Ksh {{t[1]}} - {{t[3]}} ({{t[2]}})
+        </div>
+    {% endfor %}
 
 </div>
 
-<!-- 📊 CHART SCRIPT -->
 <script>
     const data = {{ category_data | tojson }};
-
     const labels = Object.keys(data);
     const values = Object.values(data);
 
-    const ctx = document.getElementById('myChart').getContext('2d');
-
-    new Chart(ctx, {
+    new Chart(document.getElementById('myChart'), {
         type: 'pie',
         data: {
             labels: labels,
@@ -163,14 +126,6 @@
             }]
         }
     });
-</script>
-
-<!-- 📱 SERVICE WORKER -->
-<script>
-if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/static/service-worker.js")
-    .then(() => console.log("Service Worker Registered"));
-}
 </script>
 
 </body>
