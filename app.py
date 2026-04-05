@@ -47,9 +47,11 @@ def generate_insights(transactions, income, expenses, category_data):
 
     return insights
 
-# 🗄️ INIT DATABASE
+# 🗄️ INIT DATABASE (UPDATED WITH ARCHIVE TABLE)
 def init_db():
     conn = sqlite3.connect(db_path)
+
+    # Main table
     conn.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +62,19 @@ def init_db():
             description TEXT
         )
     ''')
+
+    # Archive table
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS archived_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            amount REAL,
+            type TEXT,
+            category TEXT,
+            source TEXT,
+            description TEXT
+        )
+    ''')
+
     conn.close()
 
 # 🌐 MAIN ROUTE
@@ -110,16 +125,55 @@ def index():
         insights=insights
     )
 
-# 🗑️ CLEAR DATA ROUTE (NEW)
+# 🗑️ CLEAR → MOVE TO ARCHIVE
 @app.route('/clear', methods=['POST'])
 def clear_data():
     conn = sqlite3.connect(db_path)
+
+    # Move to archive
+    conn.execute('''
+        INSERT INTO archived_transactions (amount, type, category, source, description)
+        SELECT amount, type, category, source, description FROM transactions
+    ''')
+
+    # Delete from main
     conn.execute("DELETE FROM transactions")
+
     conn.commit()
     conn.close()
+
     return redirect('/')
 
-# ▶️ RUN
+# 📂 VIEW ARCHIVE
+@app.route('/archive')
+def archive():
+    conn = sqlite3.connect(db_path)
+    archived = conn.execute("SELECT * FROM archived_transactions").fetchall()
+    conn.close()
+
+    return render_template('archive.html', archived=archived)
+
+# 🔄 RESTORE FROM ARCHIVE
+@app.route('/restore/<int:id>')
+def restore(id):
+    conn = sqlite3.connect(db_path)
+
+    # Move back to main
+    conn.execute('''
+        INSERT INTO transactions (amount, type, category, source, description)
+        SELECT amount, type, category, source, description
+        FROM archived_transactions WHERE id=?
+    ''', (id,))
+
+    # Remove from archive
+    conn.execute("DELETE FROM archived_transactions WHERE id=?", (id,))
+
+    conn.commit()
+    conn.close()
+
+    return redirect('/archive')
+
+# ▶️ RUN APP
 if __name__ == "__main__":
     init_db()
     app.run(debug=True)
