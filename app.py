@@ -87,7 +87,7 @@ def init_db():
 
     conn.close()
 
-# 📝 REGISTER (SECURE)
+# 📝 REGISTER
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -108,7 +108,7 @@ def register():
 
     return render_template('register.html')
 
-# 🔐 LOGIN (SECURE)
+# 🔐 LOGIN
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -255,6 +255,48 @@ def restore(id):
     conn.close()
 
     return redirect('/archive')
+
+# 🤖 AI CHATBOT (NEW)
+@app.route('/chat', methods=['POST'])
+def chat():
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    user_message = request.form['message'].lower()
+
+    conn = sqlite3.connect(db_path)
+
+    transactions = conn.execute(
+        "SELECT * FROM transactions WHERE user_id=?",
+        (session['user_id'],)
+    ).fetchall()
+
+    conn.close()
+
+    income = sum(t[2] for t in transactions if t[3] == "income")
+    expenses = sum(t[2] for t in transactions if t[3] == "expense")
+    balance = income - expenses
+
+    # 🤖 AI LOGIC
+    if "balance" in user_message:
+        reply = f"💰 Your current balance is Ksh {balance}"
+
+    elif "spend" in user_message:
+        if balance > 0:
+            reply = "✅ You can spend, but do it wisely."
+        else:
+            reply = "⚠️ Your balance is low. Avoid spending."
+
+    elif "save" in user_message:
+        reply = "💡 Try reducing unnecessary expenses like food delivery or subscriptions."
+
+    elif "where" in user_message or "money" in user_message:
+        reply = f"📊 You have spent Ksh {expenses} so far."
+
+    else:
+        reply = "🤖 I'm your finance assistant. Ask about balance, spending, or saving."
+
+    return reply
 
 # ▶️ RUN
 if __name__ == "__main__":

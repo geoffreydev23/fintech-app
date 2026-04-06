@@ -70,6 +70,7 @@
         }
     </style>
 </head>
+
 <body>
 
 <div class="container">
@@ -91,13 +92,9 @@
     <!-- 🤖 AI INSIGHTS -->
     <div class="summary">
         <h3>🤖 AI Insights</h3>
-        {% if insights %}
-            {% for insight in insights %}
-                <p>{{insight}}</p>
-            {% endfor %}
-        {% else %}
-            <p>No insights yet</p>
-        {% endif %}
+        {% for insight in insights %}
+            <p>{{insight}}</p>
+        {% endfor %}
     </div>
 
     <!-- 📝 ADD TRANSACTION -->
@@ -116,27 +113,36 @@
         <button type="submit">Add Transaction</button>
     </form>
 
-    <!-- 🗑️ CLEAR DATA -->
+    <!-- 🗑️ CLEAR -->
     <form method="POST" action="/clear">
         <button class="danger">🗑️ Clear All Data</button>
     </form>
 
-    <!-- 📂 VIEW ARCHIVE -->
+    <!-- 📂 ARCHIVE -->
     <a href="/archive">
         <button class="archive-btn">📂 View Archive</button>
     </a>
 
     <!-- 📋 TRANSACTIONS -->
-    <div class="transactions">
+    <div>
         <h2>Transactions</h2>
-
         {% for t in transactions %}
             <div class="card">
-                <strong>Ksh {{t[1]}}</strong><br>
-                {{t[2]}} | {{t[3]}}<br>
-                {{t[5]}}
+                <strong>Ksh {{t[2]}}</strong><br>
+                {{t[3]}} | {{t[4]}}<br>
+                {{t[6]}}
             </div>
         {% endfor %}
+    </div>
+
+    <!-- 🤖 CHATBOT -->
+    <div class="summary">
+        <h3>🤖 AI Assistant</h3>
+
+        <div id="chatBox" style="min-height:100px;"></div>
+
+        <input id="userInput" placeholder="Ask me anything...">
+        <button onclick="sendMessage()">Send</button>
     </div>
 
 </div>
@@ -144,7 +150,6 @@
 <!-- 📊 CHART SCRIPT -->
 <script>
     const data = {{ category_data | tojson }};
-
     const labels = Object.keys(data);
     const values = Object.values(data);
 
@@ -159,6 +164,31 @@
             }]
         }
     });
+</script>
+
+<!-- 🤖 CHATBOT SCRIPT (THIS IS STEP 3 — AT THE BOTTOM) -->
+<script>
+function sendMessage() {
+    let input = document.getElementById("userInput");
+    let message = input.value;
+
+    fetch("/chat", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: "message=" + encodeURIComponent(message)
+    })
+    .then(response => response.text())
+    .then(data => {
+        let chatBox = document.getElementById("chatBox");
+
+        chatBox.innerHTML += "<p><b>You:</b> " + message + "</p>";
+        chatBox.innerHTML += "<p><b>AI:</b> " + data + "</p>";
+
+        input.value = "";
+    });
+}
 </script>
 
 <!-- 📱 SERVICE WORKER -->
