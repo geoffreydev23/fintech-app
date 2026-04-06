@@ -2,9 +2,13 @@ from flask import Flask, render_template, request, redirect, session
 import sqlite3
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
+import openai
 
 app = Flask(__name__)
 app.secret_key = "secret123"
+
+# 🔐 SECURE API KEY (FROM ENVIRONMENT VARIABLE)
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # 📁 DATABASE PATH
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,18 +18,16 @@ db_path = os.path.join(BASE_DIR, 'database.db')
 def auto_category(desc):
     desc = desc.lower()
 
-    if "food" in desc or "restaurant" in desc or "kfc" in desc:
+    if "food" in desc or "restaurant" in desc:
         return "Food"
     elif "uber" in desc or "bolt" in desc or "matatu" in desc:
         return "Transport"
-    elif "rent" in desc or "house" in desc:
+    elif "rent" in desc:
         return "Housing"
-    elif "bitcoin" in desc or "crypto" in desc:
+    elif "crypto" in desc or "bitcoin" in desc:
         return "Crypto"
     elif "stock" in desc:
         return "Stocks"
-    elif "game" in desc:
-        return "Gaming"
     else:
         return "Other"
 
@@ -34,22 +36,15 @@ def generate_insights(transactions, income, expenses, category_data):
     insights = []
 
     if expenses > income:
-        insights.append("⚠️ Your expenses are higher than your income!")
-
-    total_spent = sum(category_data.values())
+        insights.append("⚠️ Your expenses exceed your income")
 
     for category, amount in category_data.items():
-        if total_spent > 0:
-            percent = (amount / total_spent) * 100
-            if percent > 40:
-                insights.append(f"⚠️ You are spending a lot on {category} ({percent:.1f}%)")
-
-    if "Crypto" in category_data and category_data["Crypto"] > 0:
-        insights.append("🪙 You are actively investing in crypto")
+        if expenses > 0 and amount > (expenses * 0.4):
+            insights.append(f"⚠️ High spending on {category}")
 
     return insights
 
-# 🗄️ INIT DATABASE
+# 🗄️ INIT DB
 def init_db():
     conn = sqlite3.connect(db_path)
 
@@ -92,14 +87,12 @@ def init_db():
 def register():
     if request.method == 'POST':
         username = request.form['username']
-        password = request.form['password']
-
-        hashed_password = generate_password_hash(password)
+        password = generate_password_hash(request.form['password'])
 
         conn = sqlite3.connect(db_path)
         conn.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            (username, hashed_password)
+            (username, password)
         )
         conn.commit()
         conn.close()
@@ -136,7 +129,7 @@ def logout():
     session.clear()
     return redirect('/login')
 
-# 🌐 MAIN PAGE
+# 🌐 HOME
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if 'user_id' not in session:
@@ -171,13 +164,8 @@ def index():
 
     category_data = {}
     for t in transactions:
-        category = t[4]
-        amount = t[2]
-
-        if category in category_data:
-            category_data[category] += amount
-        else:
-            category_data[category] = amount
+        cat = t[4]
+        category_data[cat] = category_data.get(cat, 0) + t[2]
 
     insights = generate_insights(transactions, income, expenses, category_data)
 
@@ -201,33 +189,28 @@ def clear_data():
 
     conn.execute('''
         INSERT INTO archived_transactions (user_id, amount, type, category, source, description)
-        SELECT user_id, amount, type, category, source, description 
+        SELECT user_id, amount, type, category, source, description
         FROM transactions WHERE user_id=?
     ''', (session['user_id'],))
 
-    conn.execute(
-        "DELETE FROM transactions WHERE user_id=?",
-        (session['user_id'],)
-    )
+    conn.execute("DELETE FROM transactions WHERE user_id=?", (session['user_id'],))
 
     conn.commit()
     conn.close()
 
     return redirect('/')
 
-# 📂 VIEW ARCHIVE
+# 📂 ARCHIVE
 @app.route('/archive')
 def archive():
     if 'user_id' not in session:
         return redirect('/login')
 
     conn = sqlite3.connect(db_path)
-
     archived = conn.execute(
         "SELECT * FROM archived_transactions WHERE user_id=?",
         (session['user_id'],)
     ).fetchall()
-
     conn.close()
 
     return render_template('archive.html', archived=archived)
@@ -235,9 +218,6 @@ def archive():
 # 🔄 RESTORE
 @app.route('/restore/<int:id>')
 def restore(id):
-    if 'user_id' not in session:
-        return redirect('/login')
-
     conn = sqlite3.connect(db_path)
 
     conn.execute('''
@@ -246,55 +226,49 @@ def restore(id):
         FROM archived_transactions WHERE id=?
     ''', (id,))
 
-    conn.execute(
-        "DELETE FROM archived_transactions WHERE id=?",
-        (id,)
-    )
-
+    conn.execute("DELETE FROM archived_transactions WHERE id=?", (id,))
     conn.commit()
     conn.close()
 
     return redirect('/archive')
 
-# 🤖 AI CHATBOT (NEW)
+# 🤖 REAL AI CHATBOT (SECURE)
 @app.route('/chat', methods=['POST'])
 def chat():
     if 'user_id' not in session:
         return redirect('/login')
 
-    user_message = request.form['message'].lower()
+    user_message = request.form['message']
 
     conn = sqlite3.connect(db_path)
-
     transactions = conn.execute(
         "SELECT * FROM transactions WHERE user_id=?",
         (session['user_id'],)
     ).fetchall()
-
     conn.close()
 
     income = sum(t[2] for t in transactions if t[3] == "income")
     expenses = sum(t[2] for t in transactions if t[3] == "expense")
     balance = income - expenses
 
-    # 🤖 AI LOGIC
-    if "balance" in user_message:
-        reply = f"💰 Your current balance is Ksh {balance}"
+    context = f"""
+    User financial data:
+    Income: {income}
+    Expenses: {expenses}
+    Balance: {balance}
 
-    elif "spend" in user_message:
-        if balance > 0:
-            reply = "✅ You can spend, but do it wisely."
-        else:
-            reply = "⚠️ Your balance is low. Avoid spending."
+    Give helpful financial advice.
+    """
 
-    elif "save" in user_message:
-        reply = "💡 Try reducing unnecessary expenses like food delivery or subscriptions."
+    response = openai.ChatCompletion.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": context},
+            {"role": "user", "content": user_message}
+        ]
+    )
 
-    elif "where" in user_message or "money" in user_message:
-        reply = f"📊 You have spent Ksh {expenses} so far."
-
-    else:
-        reply = "🤖 I'm your finance assistant. Ask about balance, spending, or saving."
+    reply = response['choices'][0]['message']['content']
 
     return reply
 
