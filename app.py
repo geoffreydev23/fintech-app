@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, session
 import sqlite3
 import os
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = "secret123"
@@ -52,7 +53,6 @@ def generate_insights(transactions, income, expenses, category_data):
 def init_db():
     conn = sqlite3.connect(db_path)
 
-    # USERS
     conn.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,7 +61,6 @@ def init_db():
         )
     ''')
 
-    # TRANSACTIONS
     conn.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +73,6 @@ def init_db():
         )
     ''')
 
-    # ARCHIVE
     conn.execute('''
         CREATE TABLE IF NOT EXISTS archived_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -89,17 +87,19 @@ def init_db():
 
     conn.close()
 
-# 📝 REGISTER
+# 📝 REGISTER (SECURE)
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
 
+        hashed_password = generate_password_hash(password)
+
         conn = sqlite3.connect(db_path)
         conn.execute(
             "INSERT INTO users (username, password) VALUES (?, ?)",
-            (username, password)
+            (username, hashed_password)
         )
         conn.commit()
         conn.close()
@@ -108,7 +108,7 @@ def register():
 
     return render_template('register.html')
 
-# 🔐 LOGIN
+# 🔐 LOGIN (SECURE)
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -117,12 +117,12 @@ def login():
 
         conn = sqlite3.connect(db_path)
         user = conn.execute(
-            "SELECT * FROM users WHERE username=? AND password=?",
-            (username, password)
+            "SELECT * FROM users WHERE username=?",
+            (username,)
         ).fetchone()
         conn.close()
 
-        if user:
+        if user and check_password_hash(user[2], password):
             session['user_id'] = user[0]
             return redirect('/')
         else:
