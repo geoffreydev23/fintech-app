@@ -7,7 +7,7 @@ import openai
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# 🔐 SECURE API KEY (FROM ENVIRONMENT VARIABLE)
+# 🔐 SECURE API KEY
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # 📁 DATABASE PATH
@@ -179,6 +179,27 @@ def index():
         insights=insights
     )
 
+# 💳 M-PESA (SIMULATION)
+@app.route('/mpesa', methods=['POST'])
+def mpesa():
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    amount = request.form['amount']
+    phone = request.form['phone']
+
+    print(f"M-Pesa payment: Ksh {amount} from {phone}")
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
+        (session['user_id'], amount, "income", "M-Pesa", "mpesa", "M-Pesa Deposit")
+    )
+    conn.commit()
+    conn.close()
+
+    return redirect('/')
+
 # 🗑️ CLEAR → ARCHIVE
 @app.route('/clear', methods=['POST'])
 def clear_data():
@@ -232,7 +253,7 @@ def restore(id):
 
     return redirect('/archive')
 
-# 🤖 REAL AI CHATBOT (SECURE)
+# 🤖 REAL AI CHATBOT
 @app.route('/chat', methods=['POST'])
 def chat():
     if 'user_id' not in session:

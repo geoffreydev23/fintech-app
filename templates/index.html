@@ -32,6 +32,7 @@
             background: #1e293b;
             padding: 15px;
             border-radius: 10px;
+            margin-top: 10px;
         }
 
         input, select {
@@ -54,12 +55,10 @@
 
         .danger {
             background: red;
-            margin-top: 10px;
         }
 
         .archive-btn {
             background: blue;
-            margin-top: 10px;
         }
 
         .summary, .chart-container, .card {
@@ -112,6 +111,17 @@
 
         <button type="submit">Add Transaction</button>
     </form>
+
+    <!-- 💳 M-PESA DEPOSIT (NEW) -->
+    <div class="summary">
+        <h3>💳 M-Pesa Deposit</h3>
+
+        <form method="POST" action="/mpesa">
+            <input name="phone" placeholder="Phone Number (07XXXXXXXX)" required>
+            <input name="amount" placeholder="Amount" required>
+            <button type="submit">Deposit via M-Pesa</button>
+        </form>
+    </div>
 
     <!-- 🗑️ CLEAR -->
     <form method="POST" action="/clear">
@@ -166,7 +176,7 @@
     });
 </script>
 
-<!-- 🤖 CHATBOT SCRIPT (THIS IS STEP 3 — AT THE BOTTOM) -->
+<!-- 🤖 CHATBOT SCRIPT -->
 <script>
 function sendMessage() {
     let input = document.getElementById("userInput");
