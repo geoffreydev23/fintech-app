@@ -2,13 +2,13 @@ from flask import Flask, render_template, request, redirect, session
 import sqlite3
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
-import openai
+from openai import OpenAI   # ✅ NEW IMPORT
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
 # 🔐 SECURE API KEY
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # ✅ NEW
 
 # 📁 DATABASE PATH
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -135,7 +135,6 @@ def index():
     if 'user_id' not in session:
         return redirect('/login')
 
-    # ✅ SUCCESS MESSAGE SUPPORT
     success = request.args.get('success')
 
     conn = sqlite3.connect(db_path)
@@ -180,10 +179,10 @@ def index():
         balance=balance,
         category_data=category_data,
         insights=insights,
-        success=success   # ✅ PASS TO HTML
+        success=success
     )
 
-# 💳 M-PESA (SIMULATION)
+# 💳 M-PESA
 @app.route('/mpesa', methods=['POST'])
 def mpesa():
     if 'user_id' not in session:
@@ -191,8 +190,6 @@ def mpesa():
 
     amount = request.form['amount']
     phone = request.form['phone']
-
-    print(f"M-Pesa payment: Ksh {amount} from {phone}")
 
     conn = sqlite3.connect(db_path)
     conn.execute(
@@ -202,10 +199,9 @@ def mpesa():
     conn.commit()
     conn.close()
 
-    # ✅ SUCCESS REDIRECT
     return redirect('/?success=mpesa')
 
-# 🗑️ CLEAR → ARCHIVE
+# 🗑️ CLEAR
 @app.route('/clear', methods=['POST'])
 def clear_data():
     if 'user_id' not in session:
@@ -224,7 +220,6 @@ def clear_data():
     conn.commit()
     conn.close()
 
-    # ✅ OPTIONAL SUCCESS MESSAGE
     return redirect('/?success=cleared')
 
 # 📂 ARCHIVE
@@ -242,24 +237,7 @@ def archive():
 
     return render_template('archive.html', archived=archived)
 
-# 🔄 RESTORE
-@app.route('/restore/<int:id>')
-def restore(id):
-    conn = sqlite3.connect(db_path)
-
-    conn.execute('''
-        INSERT INTO transactions (user_id, amount, type, category, source, description)
-        SELECT user_id, amount, type, category, source, description
-        FROM archived_transactions WHERE id=?
-    ''', (id,))
-
-    conn.execute("DELETE FROM archived_transactions WHERE id=?", (id,))
-    conn.commit()
-    conn.close()
-
-    return redirect('/archive')
-
-# 🤖 REAL AI CHATBOT
+# 🤖 FIXED CHATBOT
 @app.route('/chat', methods=['POST'])
 def chat():
     if 'user_id' not in session:
@@ -267,37 +245,21 @@ def chat():
 
     user_message = request.form['message']
 
-    conn = sqlite3.connect(db_path)
-    transactions = conn.execute(
-        "SELECT * FROM transactions WHERE user_id=?",
-        (session['user_id'],)
-    ).fetchall()
-    conn.close()
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful finance assistant"},
+                {"role": "user", "content": user_message}
+            ]
+        )
 
-    income = sum(t[2] for t in transactions if t[3] == "income")
-    expenses = sum(t[2] for t in transactions if t[3] == "expense")
-    balance = income - expenses
+        reply = response.choices[0].message.content
+        return reply
 
-    context = f"""
-    User financial data:
-    Income: {income}
-    Expenses: {expenses}
-    Balance: {balance}
-
-    Give helpful financial advice.
-    """
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": context},
-            {"role": "user", "content": user_message}
-        ]
-    )
-
-    reply = response['choices'][0]['message']['content']
-
-    return reply
+    except Exception as e:
+        print("CHAT ERROR:", e)
+        return "⚠️ AI temporarily unavailable. Try again."
 
 # ▶️ RUN
 if __name__ == "__main__":
