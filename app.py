@@ -7,91 +7,119 @@ import openai
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# 🔐 API KEY (FROM ENV)
+# 🔐 SECURE API KEY
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# 📁 DATABASE
+# 📁 DATABASE PATH
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_path = os.path.join(BASE_DIR, 'database.db')
 
 # 🧠 AUTO CATEGORY
 def auto_category(desc):
     desc = desc.lower()
-    if "food" in desc: return "Food"
-    if "uber" in desc or "matatu" in desc: return "Transport"
-    if "rent" in desc: return "Housing"
-    if "crypto" in desc: return "Crypto"
-    return "Other"
+
+    if "food" in desc or "restaurant" in desc:
+        return "Food"
+    elif "uber" in desc or "bolt" in desc or "matatu" in desc:
+        return "Transport"
+    elif "rent" in desc:
+        return "Housing"
+    elif "crypto" in desc or "bitcoin" in desc:
+        return "Crypto"
+    elif "stock" in desc:
+        return "Stocks"
+    else:
+        return "Other"
 
 # 🤖 AI INSIGHTS
 def generate_insights(transactions, income, expenses, category_data):
     insights = []
+
     if expenses > income:
-        insights.append("⚠️ Expenses exceed income")
-    for cat, amt in category_data.items():
-        if expenses > 0 and amt > expenses * 0.4:
-            insights.append(f"⚠️ High spending on {cat}")
+        insights.append("⚠️ Your expenses exceed your income")
+
+    for category, amount in category_data.items():
+        if expenses > 0 and amount > (expenses * 0.4):
+            insights.append(f"⚠️ High spending on {category}")
+
     return insights
 
 # 🗄️ INIT DB
 def init_db():
     conn = sqlite3.connect(db_path)
 
-    conn.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT)''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT
+        )
+    ''')
 
-    conn.execute('''CREATE TABLE IF NOT EXISTS transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        amount REAL,
-        type TEXT,
-        category TEXT,
-        source TEXT,
-        description TEXT)''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            amount REAL,
+            type TEXT,
+            category TEXT,
+            source TEXT,
+            description TEXT
+        )
+    ''')
 
-    conn.execute('''CREATE TABLE IF NOT EXISTS archived_transactions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        amount REAL,
-        type TEXT,
-        category TEXT,
-        source TEXT,
-        description TEXT)''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS archived_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            amount REAL,
+            type TEXT,
+            category TEXT,
+            source TEXT,
+            description TEXT
+        )
+    ''')
 
     conn.close()
 
 # 📝 REGISTER
-@app.route('/register', methods=['GET','POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
         username = request.form['username']
         password = generate_password_hash(request.form['password'])
 
         conn = sqlite3.connect(db_path)
-        conn.execute("INSERT INTO users (username,password) VALUES (?,?)",(username,password))
+        conn.execute(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            (username, password)
+        )
         conn.commit()
         conn.close()
+
         return redirect('/login')
 
     return render_template('register.html')
 
 # 🔐 LOGIN
-@app.route('/login', methods=['GET','POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
 
         conn = sqlite3.connect(db_path)
-        user = conn.execute("SELECT * FROM users WHERE username=?",(username,)).fetchone()
+        user = conn.execute(
+            "SELECT * FROM users WHERE username=?",
+            (username,)
+        ).fetchone()
         conn.close()
 
-        if user and check_password_hash(user[2],password):
+        if user and check_password_hash(user[2], password):
             session['user_id'] = user[0]
             return redirect('/')
-        return "Invalid login"
+        else:
+            return "Invalid login"
 
     return render_template('login.html')
 
@@ -102,12 +130,10 @@ def logout():
     return redirect('/login')
 
 # 🌐 HOME
-@app.route('/', methods=['GET','POST'])
+@app.route('/', methods=['GET', 'POST'])
 def index():
     if 'user_id' not in session:
         return redirect('/login')
-
-    success = request.args.get('success')
 
     conn = sqlite3.connect(db_path)
 
@@ -116,35 +142,44 @@ def index():
         t_type = request.form['type']
         source = request.form['source']
         desc = request.form['description']
+
         category = request.form['category'] or auto_category(desc)
 
-        conn.execute("INSERT INTO transactions (user_id,amount,type,category,source,description) VALUES (?,?,?,?,?,?)",
-        (session['user_id'],amount,t_type,category,source,desc))
+        conn.execute(
+            "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
+            (session['user_id'], amount, t_type, category, source, desc)
+        )
         conn.commit()
 
-    transactions = conn.execute("SELECT * FROM transactions WHERE user_id=?",(session['user_id'],)).fetchall()
+    transactions = conn.execute(
+        "SELECT * FROM transactions WHERE user_id=?",
+        (session['user_id'],)
+    ).fetchall()
+
     conn.close()
 
-    income = sum(t[2] for t in transactions if t[3]=='income')
-    expenses = sum(t[2] for t in transactions if t[3]=='expense')
+    income = sum(t[2] for t in transactions if t[3] == "income")
+    expenses = sum(t[2] for t in transactions if t[3] == "expense")
     balance = income - expenses
 
-    category_data={}
+    category_data = {}
     for t in transactions:
-        category_data[t[4]] = category_data.get(t[4],0)+t[2]
+        cat = t[4]
+        category_data[cat] = category_data.get(cat, 0) + t[2]
 
-    insights = generate_insights(transactions,income,expenses,category_data)
+    insights = generate_insights(transactions, income, expenses, category_data)
 
-    return render_template('index.html',
+    return render_template(
+        'index.html',
         transactions=transactions,
         income=income,
         expenses=expenses,
         balance=balance,
         category_data=category_data,
-        insights=insights,
-        success=success)
+        insights=insights
+    )
 
-# 💳 M-PESA
+# 💳 M-PESA (SIMULATION)
 @app.route('/mpesa', methods=['POST'])
 def mpesa():
     if 'user_id' not in session:
@@ -153,46 +188,110 @@ def mpesa():
     amount = request.form['amount']
     phone = request.form['phone']
 
+    print(f"M-Pesa payment: Ksh {amount} from {phone}")
+
     conn = sqlite3.connect(db_path)
-    conn.execute("INSERT INTO transactions (user_id,amount,type,category,source,description) VALUES (?,?,?,?,?,?)",
-    (session['user_id'],amount,"income","M-Pesa","mpesa","Deposit"))
+    conn.execute(
+        "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
+        (session['user_id'], amount, "income", "M-Pesa", "mpesa", "M-Pesa Deposit")
+    )
     conn.commit()
     conn.close()
 
-    return redirect('/?success=mpesa')
+    return redirect('/')
 
 # 🗑️ CLEAR → ARCHIVE
 @app.route('/clear', methods=['POST'])
 def clear_data():
+    if 'user_id' not in session:
+        return redirect('/login')
+
     conn = sqlite3.connect(db_path)
-    conn.execute("INSERT INTO archived_transactions SELECT * FROM transactions")
-    conn.execute("DELETE FROM transactions")
+
+    conn.execute('''
+        INSERT INTO archived_transactions (user_id, amount, type, category, source, description)
+        SELECT user_id, amount, type, category, source, description
+        FROM transactions WHERE user_id=?
+    ''', (session['user_id'],))
+
+    conn.execute("DELETE FROM transactions WHERE user_id=?", (session['user_id'],))
+
     conn.commit()
     conn.close()
+
     return redirect('/')
 
 # 📂 ARCHIVE
 @app.route('/archive')
 def archive():
-    conn = sqlite3.connect(db_path)
-    data = conn.execute("SELECT * FROM archived_transactions").fetchall()
-    conn.close()
-    return render_template('archive.html', archived=data)
+    if 'user_id' not in session:
+        return redirect('/login')
 
-# 🤖 CHATBOT
+    conn = sqlite3.connect(db_path)
+    archived = conn.execute(
+        "SELECT * FROM archived_transactions WHERE user_id=?",
+        (session['user_id'],)
+    ).fetchall()
+    conn.close()
+
+    return render_template('archive.html', archived=archived)
+
+# 🔄 RESTORE
+@app.route('/restore/<int:id>')
+def restore(id):
+    conn = sqlite3.connect(db_path)
+
+    conn.execute('''
+        INSERT INTO transactions (user_id, amount, type, category, source, description)
+        SELECT user_id, amount, type, category, source, description
+        FROM archived_transactions WHERE id=?
+    ''', (id,))
+
+    conn.execute("DELETE FROM archived_transactions WHERE id=?", (id,))
+    conn.commit()
+    conn.close()
+
+    return redirect('/archive')
+
+# 🤖 REAL AI CHATBOT
 @app.route('/chat', methods=['POST'])
 def chat():
+    if 'user_id' not in session:
+        return redirect('/login')
+
     user_message = request.form['message']
+
+    conn = sqlite3.connect(db_path)
+    transactions = conn.execute(
+        "SELECT * FROM transactions WHERE user_id=?",
+        (session['user_id'],)
+    ).fetchall()
+    conn.close()
+
+    income = sum(t[2] for t in transactions if t[3] == "income")
+    expenses = sum(t[2] for t in transactions if t[3] == "expense")
+    balance = income - expenses
+
+    context = f"""
+    User financial data:
+    Income: {income}
+    Expenses: {expenses}
+    Balance: {balance}
+
+    Give helpful financial advice.
+    """
 
     response = openai.ChatCompletion.create(
         model="gpt-4o-mini",
         messages=[
-            {"role":"system","content":"You are a helpful finance assistant"},
-            {"role":"user","content":user_message}
+            {"role": "system", "content": context},
+            {"role": "user", "content": user_message}
         ]
     )
 
-    return response['choices'][0]['message']['content']
+    reply = response['choices'][0]['message']['content']
+
+    return reply
 
 # ▶️ RUN
 if __name__ == "__main__":

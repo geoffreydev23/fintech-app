@@ -1,96 +1,212 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Fintech</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Fintech App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<style>
-body{background:#0f172a;color:white;font-family:Arial;padding:20px}
-.container{max-width:500px;margin:auto}
-.summary,.card{background:#1e293b;padding:15px;border-radius:10px;margin-top:10px}
-button{background:#22c55e;color:white;padding:10px;border:none;width:100%}
-.chat-user{background:#22c55e;padding:8px;border-radius:10px;margin:5px;text-align:right}
-.chat-ai{background:#334155;padding:8px;border-radius:10px;margin:5px}
-</style>
+    <!-- 📱 PWA -->
+    <link rel="manifest" href="/static/manifest.json">
+
+    <!-- 📊 Chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: auto;
+        }
+
+        form {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: none;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #22c55e;
+            border: none;
+            color: white;
+            font-weight: bold;
+            border-radius: 5px;
+        }
+
+        .danger {
+            background: red;
+        }
+
+        .archive-btn {
+            background: blue;
+        }
+
+        .summary, .chart-container, .card {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 
 <body>
+
 <div class="container">
 
-<h1>💰 Fintech App</h1>
+    <h1>💰 Smart Finance Tracker</h1>
 
-{% if success=="mpesa" %}
-<div style="background:green;padding:10px">Payment successful</div>
-{% endif %}
+    <!-- 📊 SUMMARY -->
+    <div class="summary">
+        <p>💰 Income: Ksh {{income}}</p>
+        <p>💸 Expenses: Ksh {{expenses}}</p>
+        <p>⚖️ Balance: Ksh {{balance}}</p>
+    </div>
 
-<div class="summary">
-<p>Income: {{income}}</p>
-<p>Expenses: {{expenses}}</p>
-<p>Balance: {{balance}}</p>
+    <!-- 📊 CHART -->
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <!-- 🤖 AI INSIGHTS -->
+    <div class="summary">
+        <h3>🤖 AI Insights</h3>
+        {% for insight in insights %}
+            <p>{{insight}}</p>
+        {% endfor %}
+    </div>
+
+    <!-- 📝 ADD TRANSACTION -->
+    <form method="POST">
+        <input name="amount" placeholder="Amount" required>
+
+        <select name="type">
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+        </select>
+
+        <input name="category" placeholder="Category (optional)">
+        <input name="source" placeholder="Source (mpesa, crypto, bank)">
+        <input name="description" placeholder="Description">
+
+        <button type="submit">Add Transaction</button>
+    </form>
+
+    <!-- 💳 M-PESA DEPOSIT (NEW) -->
+    <div class="summary">
+        <h3>💳 M-Pesa Deposit</h3>
+
+        <form method="POST" action="/mpesa">
+            <input name="phone" placeholder="Phone Number (07XXXXXXXX)" required>
+            <input name="amount" placeholder="Amount" required>
+            <button type="submit">Deposit via M-Pesa</button>
+        </form>
+    </div>
+
+    <!-- 🗑️ CLEAR -->
+    <form method="POST" action="/clear">
+        <button class="danger">🗑️ Clear All Data</button>
+    </form>
+
+    <!-- 📂 ARCHIVE -->
+    <a href="/archive">
+        <button class="archive-btn">📂 View Archive</button>
+    </a>
+
+    <!-- 📋 TRANSACTIONS -->
+    <div>
+        <h2>Transactions</h2>
+        {% for t in transactions %}
+            <div class="card">
+                <strong>Ksh {{t[2]}}</strong><br>
+                {{t[3]}} | {{t[4]}}<br>
+                {{t[6]}}
+            </div>
+        {% endfor %}
+    </div>
+
+    <!-- 🤖 CHATBOT -->
+    <div class="summary">
+        <h3>🤖 AI Assistant</h3>
+
+        <div id="chatBox" style="min-height:100px;"></div>
+
+        <input id="userInput" placeholder="Ask me anything...">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
 </div>
 
-<canvas id="myChart"></canvas>
-
-<form method="POST">
-<input name="amount" placeholder="Amount">
-<select name="type">
-<option value="expense">Expense</option>
-<option value="income">Income</option>
-</select>
-<input name="category" placeholder="Category">
-<input name="source" placeholder="Source">
-<input name="description" placeholder="Description">
-<button onclick="showLoading(this)">Add</button>
-</form>
-
-<div class="summary">
-<h3>M-Pesa</h3>
-<form method="POST" action="/mpesa">
-<input name="phone" placeholder="07...">
-<input name="amount" placeholder="Amount">
-<button onclick="showLoading(this)">Deposit</button>
-</form>
-</div>
-
-<div>
-{% for t in transactions %}
-<div class="card">Ksh {{t[2]}} | {{t[4]}}</div>
-{% endfor %}
-</div>
-
-<div class="summary">
-<div id="chatBox"></div>
-<input id="userInput">
-<button onclick="sendMessage()">Send</button>
-</div>
-
-</div>
-
+<!-- 📊 CHART SCRIPT -->
 <script>
-function showLoading(btn){btn.innerText="Processing...";btn.disabled=true;}
+    const data = {{ category_data | tojson }};
+    const labels = Object.keys(data);
+    const values = Object.values(data);
+
+    const ctx = document.getElementById('myChart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values
+            }]
+        }
+    });
 </script>
 
+<!-- 🤖 CHATBOT SCRIPT -->
 <script>
-function sendMessage(){
-let msg=document.getElementById("userInput").value;
-fetch("/chat",{method:"POST",
-headers:{"Content-Type":"application/x-www-form-urlencoded"},
-body:"message="+msg})
-.then(r=>r.text()).then(d=>{
-let box=document.getElementById("chatBox");
-box.innerHTML+=`<div class="chat-user">${msg}</div>`;
-box.innerHTML+=`<div class="chat-ai">${d}</div>`;
-});
+function sendMessage() {
+    let input = document.getElementById("userInput");
+    let message = input.value;
+
+    fetch("/chat", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: "message=" + encodeURIComponent(message)
+    })
+    .then(response => response.text())
+    .then(data => {
+        let chatBox = document.getElementById("chatBox");
+
+        chatBox.innerHTML += "<p><b>You:</b> " + message + "</p>";
+        chatBox.innerHTML += "<p><b>AI:</b> " + data + "</p>";
+
+        input.value = "";
+    });
 }
 </script>
 
+<!-- 📱 SERVICE WORKER -->
 <script>
-const data={{category_data|tojson}};
-new Chart(document.getElementById('myChart'),{
-type:'pie',
-data:{labels:Object.keys(data),datasets:[{data:Object.values(data)}]}
-});
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/static/service-worker.js")
+    .then(() => console.log("Service Worker Registered"));
+}
 </script>
 
 </body>
