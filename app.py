@@ -2,13 +2,13 @@ from flask import Flask, render_template, request, redirect, session
 import sqlite3
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
-from openai import OpenAI   # ✅ NEW IMPORT
+from openai import OpenAI
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
 # 🔐 SECURE API KEY
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # ✅ NEW
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # 📁 DATABASE PATH
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -237,29 +237,69 @@ def archive():
 
     return render_template('archive.html', archived=archived)
 
-# 🤖 FIXED CHATBOT
+# 🤖 SMART CHATBOT (AI + FALLBACK)
 @app.route('/chat', methods=['POST'])
 def chat():
     if 'user_id' not in session:
         return redirect('/login')
 
-    user_message = request.form['message']
+    user_message = request.form['message'].lower()
 
+    # 📊 USER DATA
+    conn = sqlite3.connect(db_path)
+    transactions = conn.execute(
+        "SELECT * FROM transactions WHERE user_id=?",
+        (session['user_id'],)
+    ).fetchall()
+    conn.close()
+
+    income = sum(t[2] for t in transactions if t[3] == "income")
+    expenses = sum(t[2] for t in transactions if t[3] == "expense")
+    balance = income - expenses
+
+    # 🧠 FALLBACK AI
+    def fallback_ai(msg):
+        if "balance" in msg:
+            return f"💰 Your current balance is Ksh {balance}"
+        elif "income" in msg:
+            return f"📈 Your total income is Ksh {income}"
+        elif "expense" in msg or "spending" in msg:
+            return f"💸 Your total expenses are Ksh {expenses}"
+        elif "save" in msg:
+            return "💡 Try saving at least 20% of your income."
+        elif "invest" in msg:
+            return "📊 Consider investing in stocks, crypto, or savings."
+        elif "hello" in msg or "hi" in msg:
+            return "👋 Hello! I'm your finance assistant."
+        else:
+            return "🤖 Ask me about your balance, spending, or savings."
+
+    # 🤖 TRY REAL AI
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful finance assistant"},
+                {
+                    "role": "system",
+                    "content": f"""
+                    You are a smart finance assistant.
+
+                    Income: {income}
+                    Expenses: {expenses}
+                    Balance: {balance}
+
+                    Give short helpful advice.
+                    """
+                },
                 {"role": "user", "content": user_message}
             ]
         )
 
-        reply = response.choices[0].message.content
-        return reply
+        return response.choices[0].message.content
 
     except Exception as e:
         print("CHAT ERROR:", e)
-        return "⚠️ AI temporarily unavailable. Try again."
+        return fallback_ai(user_message)
 
 # ▶️ RUN
 if __name__ == "__main__":
