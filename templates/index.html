@@ -67,6 +67,28 @@
             border-radius: 10px;
             margin-top: 10px;
         }
+
+        /* 🤖 Chat UI Upgrade */
+        .chat-user {
+            background: #22c55e;
+            padding: 8px;
+            border-radius: 10px;
+            margin: 5px;
+            text-align: right;
+        }
+
+        .chat-ai {
+            background: #334155;
+            padding: 8px;
+            border-radius: 10px;
+            margin: 5px;
+        }
+
+        #chatBox {
+            min-height: 100px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 
@@ -75,6 +97,13 @@
 <div class="container">
 
     <h1>💰 Smart Finance Tracker</h1>
+
+    <!-- ✅ SUCCESS MESSAGE -->
+    {% if success == "mpesa" %}
+        <div style="background: green; padding:10px; border-radius:8px; margin-bottom:10px;">
+            ✅ M-Pesa payment successful!
+        </div>
+    {% endif %}
 
     <!-- 📊 SUMMARY -->
     <div class="summary">
@@ -109,23 +138,26 @@
         <input name="source" placeholder="Source (mpesa, crypto, bank)">
         <input name="description" placeholder="Description">
 
-        <button type="submit">Add Transaction</button>
+        <!-- ✅ LOADING BUTTON -->
+        <button type="submit" onclick="showLoading(this)">Add Transaction</button>
     </form>
 
-    <!-- 💳 M-PESA DEPOSIT (NEW) -->
+    <!-- 💳 M-PESA DEPOSIT -->
     <div class="summary">
         <h3>💳 M-Pesa Deposit</h3>
 
         <form method="POST" action="/mpesa">
             <input name="phone" placeholder="Phone Number (07XXXXXXXX)" required>
             <input name="amount" placeholder="Amount" required>
-            <button type="submit">Deposit via M-Pesa</button>
+
+            <!-- ✅ LOADING BUTTON -->
+            <button type="submit" onclick="showLoading(this)">Deposit via M-Pesa</button>
         </form>
     </div>
 
     <!-- 🗑️ CLEAR -->
     <form method="POST" action="/clear">
-        <button class="danger">🗑️ Clear All Data</button>
+        <button class="danger" onclick="showLoading(this)">🗑️ Clear All Data</button>
     </form>
 
     <!-- 📂 ARCHIVE -->
@@ -149,7 +181,8 @@
     <div class="summary">
         <h3>🤖 AI Assistant</h3>
 
-        <div id="chatBox" style="min-height:100px;"></div>
+        <!-- ✅ SCROLLABLE CHAT -->
+        <div id="chatBox"></div>
 
         <input id="userInput" placeholder="Ask me anything...">
         <button onclick="sendMessage()">Send</button>
@@ -176,7 +209,15 @@
     });
 </script>
 
-<!-- 🤖 CHATBOT SCRIPT -->
+<!-- 🔄 LOADING SCRIPT -->
+<script>
+function showLoading(btn) {
+    btn.innerText = "Processing...";
+    btn.disabled = true;
+}
+</script>
+
+<!-- 🤖 CHATBOT SCRIPT (UPGRADED UI) -->
 <script>
 function sendMessage() {
     let input = document.getElementById("userInput");
@@ -193,10 +234,13 @@ function sendMessage() {
     .then(data => {
         let chatBox = document.getElementById("chatBox");
 
-        chatBox.innerHTML += "<p><b>You:</b> " + message + "</p>";
-        chatBox.innerHTML += "<p><b>AI:</b> " + data + "</p>";
+        chatBox.innerHTML += `<div class="chat-user">${message}</div>`;
+        chatBox.innerHTML += `<div class="chat-ai">${data}</div>`;
 
         input.value = "";
+
+        // ✅ AUTO SCROLL
+        chatBox.scrollTop = chatBox.scrollHeight;
     });
 }
 </script>

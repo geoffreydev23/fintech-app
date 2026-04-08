@@ -135,6 +135,9 @@ def index():
     if 'user_id' not in session:
         return redirect('/login')
 
+    # ✅ SUCCESS MESSAGE SUPPORT
+    success = request.args.get('success')
+
     conn = sqlite3.connect(db_path)
 
     if request.method == 'POST':
@@ -176,7 +179,8 @@ def index():
         expenses=expenses,
         balance=balance,
         category_data=category_data,
-        insights=insights
+        insights=insights,
+        success=success   # ✅ PASS TO HTML
     )
 
 # 💳 M-PESA (SIMULATION)
@@ -198,7 +202,8 @@ def mpesa():
     conn.commit()
     conn.close()
 
-    return redirect('/')
+    # ✅ SUCCESS REDIRECT
+    return redirect('/?success=mpesa')
 
 # 🗑️ CLEAR → ARCHIVE
 @app.route('/clear', methods=['POST'])
@@ -219,7 +224,8 @@ def clear_data():
     conn.commit()
     conn.close()
 
-    return redirect('/')
+    # ✅ OPTIONAL SUCCESS MESSAGE
+    return redirect('/?success=cleared')
 
 # 📂 ARCHIVE
 @app.route('/archive')
