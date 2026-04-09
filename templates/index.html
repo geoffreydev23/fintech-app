@@ -68,7 +68,22 @@
             margin-top: 10px;
         }
 
-        /* 🤖 Chat UI Upgrade */
+        /* 🎯 Progress Bar */
+        .progress-bar {
+            background: #334155;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 12px;
+            margin-top: 5px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #22c55e;
+            width: {{ savings_goal.progress }}%;
+        }
+
+        /* 🤖 Chat UI */
         .chat-user {
             background: #22c55e;
             padding: 8px;
@@ -112,6 +127,30 @@
         <p>⚖️ Balance: Ksh {{balance}}</p>
     </div>
 
+    <!-- 💯 FINANCIAL SCORE -->
+    <div class="summary">
+        <h3>💯 Financial Score</h3>
+        <h2>{{score}} / 100</h2>
+        <p>{{score_status}}</p>
+    </div>
+
+    <!-- 🎯 SAVINGS GOAL -->
+    <div class="summary">
+        <h3>🎯 Savings Goal</h3>
+
+        <p>Saved: Ksh {{savings_goal.saved}}</p>
+        <p>Target: Ksh {{savings_goal.target}}</p>
+        <p>Status: {{savings_goal.status}}</p>
+
+        <!-- Progress Bar -->
+        <div class="progress-bar">
+            <div class="progress-fill"></div>
+        </div>
+
+        <p>{{savings_goal.progress}}% complete</p>
+        <p>{{savings_goal.message}}</p>
+    </div>
+
     <!-- 📊 CHART -->
     <div class="chart-container">
         <canvas id="myChart"></canvas>
@@ -125,7 +164,7 @@
         {% endfor %}
     </div>
 
-    <!-- 💰 AI BUDGETING (NEW) -->
+    <!-- 💰 AI BUDGETING -->
     <div class="summary">
         <h3>📊 AI Budgeting</h3>
 
@@ -155,7 +194,6 @@
         <input name="source" placeholder="Source (mpesa, crypto, bank)">
         <input name="description" placeholder="Description">
 
-        <!-- ✅ LOADING BUTTON -->
         <button type="submit" onclick="showLoading(this)">Add Transaction</button>
     </form>
 
@@ -167,7 +205,6 @@
             <input name="phone" placeholder="Phone Number (07XXXXXXXX)" required>
             <input name="amount" placeholder="Amount" required>
 
-            <!-- ✅ LOADING BUTTON -->
             <button type="submit" onclick="showLoading(this)">Deposit via M-Pesa</button>
         </form>
     </div>

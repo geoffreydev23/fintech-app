@@ -92,13 +92,12 @@ def generate_budget(category_data, income, expenses):
 
     return budget, tips
 
-# 💯 FINANCIAL SCORE (NEW)
+# 💯 FINANCIAL SCORE
 def calculate_financial_score(income, expenses):
     if income == 0:
         return 0, "⚠️ No income data"
 
     score = 50
-
     ratio = expenses / income
 
     if ratio < 0.5:
@@ -132,6 +131,52 @@ def calculate_financial_score(income, expenses):
         status = "🚨 Poor"
 
     return score, status
+
+# 🎯 SAVINGS GOAL SYSTEM (NEW)
+def generate_savings_goal(income, expenses):
+    savings = income - expenses
+
+    if income == 0:
+        return {
+            "status": "⚠️ No income data",
+            "saved": 0,
+            "target": 0,
+            "progress": 0,
+            "message": "Add income to start saving."
+        }
+
+    target = income * 0.2
+
+    if savings <= 0:
+        return {
+            "status": "❌ No savings",
+            "saved": 0,
+            "target": round(target, 2),
+            "progress": 0,
+            "message": "Try reducing expenses to start saving."
+        }
+
+    progress = (savings / target) * 100 if target > 0 else 0
+    progress = min(progress, 100)
+
+    if progress >= 100:
+        status = "🎉 Goal Achieved"
+        message = "Excellent! Consider investing your extra savings."
+    elif progress >= 50:
+        status = "👍 Good Progress"
+        message = "You're halfway there. Keep going!"
+    else:
+        status = "⚠️ Needs Improvement"
+        remaining = target - savings
+        message = f"Save Ksh {round(remaining, 2)} more to reach your goal."
+
+    return {
+        "status": status,
+        "saved": round(savings, 2),
+        "target": round(target, 2),
+        "progress": round(progress, 2),
+        "message": message
+    }
 
 # 🗄️ INIT DB
 def init_db():
@@ -262,8 +307,10 @@ def index():
 
     budget_data, budget_tips = generate_budget(category_data, income, expenses)
 
-    # ✅ NEW SCORE
     score, score_status = calculate_financial_score(income, expenses)
+
+    # 🎯 NEW SAVINGS GOAL
+    savings_goal = generate_savings_goal(income, expenses)
 
     return render_template(
         'index.html',
@@ -277,105 +324,9 @@ def index():
         budget_data=budget_data,
         budget_tips=budget_tips,
         score=score,
-        score_status=score_status
+        score_status=score_status,
+        savings_goal=savings_goal
     )
-
-# 💳 M-PESA
-@app.route('/mpesa', methods=['POST'])
-def mpesa():
-    if 'user_id' not in session:
-        return redirect('/login')
-
-    amount = request.form['amount']
-    phone = request.form['phone']
-
-    conn = sqlite3.connect(db_path)
-    conn.execute(
-        "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
-        (session['user_id'], amount, "income", "M-Pesa", "mpesa", "M-Pesa Deposit")
-    )
-    conn.commit()
-    conn.close()
-
-    return redirect('/?success=mpesa')
-
-# 🗑️ CLEAR
-@app.route('/clear', methods=['POST'])
-def clear_data():
-    if 'user_id' not in session:
-        return redirect('/login')
-
-    conn = sqlite3.connect(db_path)
-
-    conn.execute('''
-        INSERT INTO archived_transactions (user_id, amount, type, category, source, description)
-        SELECT user_id, amount, type, category, source, description
-        FROM transactions WHERE user_id=?
-    ''', (session['user_id'],))
-
-    conn.execute("DELETE FROM transactions WHERE user_id=?", (session['user_id'],))
-
-    conn.commit()
-    conn.close()
-
-    return redirect('/?success=cleared')
-
-# 📂 ARCHIVE
-@app.route('/archive')
-def archive():
-    if 'user_id' not in session:
-        return redirect('/login')
-
-    conn = sqlite3.connect(db_path)
-    archived = conn.execute(
-        "SELECT * FROM archived_transactions WHERE user_id=?",
-        (session['user_id'],)
-    ).fetchall()
-    conn.close()
-
-    return render_template('archive.html', archived=archived)
-
-# 🤖 CHAT (UNCHANGED)
-@app.route('/chat', methods=['POST'])
-def chat():
-    if 'user_id' not in session:
-        return redirect('/login')
-
-    user_message = request.form['message'].lower()
-
-    conn = sqlite3.connect(db_path)
-    transactions = conn.execute(
-        "SELECT * FROM transactions WHERE user_id=?",
-        (session['user_id'],)
-    ).fetchall()
-    conn.close()
-
-    income = sum(t[2] for t in transactions if t[3] == "income")
-    expenses = sum(t[2] for t in transactions if t[3] == "expense")
-    balance = income - expenses
-
-    def fallback_ai(msg):
-        if "balance" in msg:
-            return f"💰 Your current balance is Ksh {balance}"
-        elif "income" in msg:
-            return f"📈 Your total income is Ksh {income}"
-        elif "expense" in msg:
-            return f"💸 Your total expenses are Ksh {expenses}"
-        else:
-            return "🤖 Ask about your finances."
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a finance assistant"},
-                {"role": "user", "content": user_message}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        print("CHAT ERROR:", e)
-        return fallback_ai(user_message)
 
 # ▶️ RUN
 if __name__ == "__main__":
