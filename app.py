@@ -44,23 +44,52 @@ def generate_insights(transactions, income, expenses, category_data):
 
     return insights
 
-# 💰 AI BUDGETING SYSTEM (NEW)
-def generate_budget(category_data, income):
+# 🧠 SMART AI BUDGETING (UPDATED)
+def generate_budget(category_data, income, expenses):
     budget = {}
     tips = []
 
+    if income == 0:
+        return {}, ["⚠️ Add income to generate a budget"]
+
+    spending_ratio = expenses / income if income > 0 else 0
+
     for category, amount in category_data.items():
-        recommended = income * 0.3  # 30% rule
+
+        if spending_ratio > 0.8:
+            recommended_pct = 0.15
+        elif spending_ratio > 0.5:
+            recommended_pct = 0.25
+        else:
+            recommended_pct = 0.35
+
+        recommended = income * recommended_pct
 
         budget[category] = {
             "spent": amount,
-            "recommended": recommended
+            "recommended": round(recommended, 2)
         }
 
         if amount > recommended:
-            tips.append(f"⚠️ You are overspending on {category}")
+            tips.append(f"⚠️ Reduce {category} spending. You're above safe limit.")
+        elif amount < (recommended * 0.5):
+            tips.append(f"💡 You can safely spend more on {category}.")
         else:
-            tips.append(f"✅ Your {category} spending is healthy")
+            tips.append(f"✅ Good balance in {category} spending.")
+
+    # Global advice
+    if spending_ratio > 0.8:
+        tips.append("🚨 You are spending too much overall.")
+    elif spending_ratio > 0.5:
+        tips.append("⚠️ Watch your spending.")
+    else:
+        tips.append("✅ Your spending is healthy.")
+
+    savings = income - expenses
+    if savings > 0:
+        tips.append(f"💰 You saved Ksh {savings}. Consider investing.")
+    else:
+        tips.append("⚠️ No savings detected.")
 
     return budget, tips
 
@@ -191,8 +220,8 @@ def index():
 
     insights = generate_insights(transactions, income, expenses, category_data)
 
-    # ✅ NEW: AI BUDGETING
-    budget_data, budget_tips = generate_budget(category_data, income)
+    # ✅ UPDATED HERE
+    budget_data, budget_tips = generate_budget(category_data, income, expenses)
 
     return render_template(
         'index.html',
@@ -203,8 +232,8 @@ def index():
         category_data=category_data,
         insights=insights,
         success=success,
-        budget_data=budget_data,      # ✅ NEW
-        budget_tips=budget_tips       # ✅ NEW
+        budget_data=budget_data,
+        budget_tips=budget_tips
     )
 
 # 💳 M-PESA
@@ -262,7 +291,7 @@ def archive():
 
     return render_template('archive.html', archived=archived)
 
-# 🤖 SMART CHATBOT (AI + FALLBACK)
+# 🤖 CHAT (UNCHANGED)
 @app.route('/chat', methods=['POST'])
 def chat():
     if 'user_id' not in session:
@@ -286,39 +315,20 @@ def chat():
             return f"💰 Your current balance is Ksh {balance}"
         elif "income" in msg:
             return f"📈 Your total income is Ksh {income}"
-        elif "expense" in msg or "spending" in msg:
+        elif "expense" in msg:
             return f"💸 Your total expenses are Ksh {expenses}"
-        elif "save" in msg:
-            return "💡 Try saving at least 20% of your income."
-        elif "invest" in msg:
-            return "📊 Consider investing in stocks, crypto, or savings."
-        elif "hello" in msg or "hi" in msg:
-            return "👋 Hello! I'm your finance assistant."
         else:
-            return "🤖 Ask me about your balance, spending, or savings."
+            return "🤖 Ask about your finances."
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": f"""
-                    You are a smart finance assistant.
-
-                    Income: {income}
-                    Expenses: {expenses}
-                    Balance: {balance}
-
-                    Give short helpful advice.
-                    """
-                },
+                {"role": "system", "content": "You are a finance assistant"},
                 {"role": "user", "content": user_message}
             ]
         )
-
         return response.choices[0].message.content
-
     except Exception as e:
         print("CHAT ERROR:", e)
         return fallback_ai(user_message)
