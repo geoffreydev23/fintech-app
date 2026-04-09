@@ -125,6 +125,23 @@
         {% endfor %}
     </div>
 
+    <!-- 💰 AI BUDGETING (NEW) -->
+    <div class="summary">
+        <h3>📊 AI Budgeting</h3>
+
+        {% for category, data in budget_data.items() %}
+            <p>
+                <b>{{category}}</b>: 
+                Spent Ksh {{data.spent}} / Recommended Ksh {{data.recommended}}
+            </p>
+        {% endfor %}
+
+        <h4>💡 Tips</h4>
+        {% for tip in budget_tips %}
+            <p>{{tip}}</p>
+        {% endfor %}
+    </div>
+
     <!-- 📝 ADD TRANSACTION -->
     <form method="POST">
         <input name="amount" placeholder="Amount" required>
@@ -181,7 +198,6 @@
     <div class="summary">
         <h3>🤖 AI Assistant</h3>
 
-        <!-- ✅ SCROLLABLE CHAT -->
         <div id="chatBox"></div>
 
         <input id="userInput" placeholder="Ask me anything...">
@@ -217,7 +233,7 @@ function showLoading(btn) {
 }
 </script>
 
-<!-- 🤖 CHATBOT SCRIPT (UPGRADED UI) -->
+<!-- 🤖 CHATBOT SCRIPT -->
 <script>
 function sendMessage() {
     let input = document.getElementById("userInput");
@@ -238,8 +254,6 @@ function sendMessage() {
         chatBox.innerHTML += `<div class="chat-ai">${data}</div>`;
 
         input.value = "";
-
-        // ✅ AUTO SCROLL
         chatBox.scrollTop = chatBox.scrollHeight;
     });
 }

@@ -44,6 +44,26 @@ def generate_insights(transactions, income, expenses, category_data):
 
     return insights
 
+# 💰 AI BUDGETING SYSTEM (NEW)
+def generate_budget(category_data, income):
+    budget = {}
+    tips = []
+
+    for category, amount in category_data.items():
+        recommended = income * 0.3  # 30% rule
+
+        budget[category] = {
+            "spent": amount,
+            "recommended": recommended
+        }
+
+        if amount > recommended:
+            tips.append(f"⚠️ You are overspending on {category}")
+        else:
+            tips.append(f"✅ Your {category} spending is healthy")
+
+    return budget, tips
+
 # 🗄️ INIT DB
 def init_db():
     conn = sqlite3.connect(db_path)
@@ -171,6 +191,9 @@ def index():
 
     insights = generate_insights(transactions, income, expenses, category_data)
 
+    # ✅ NEW: AI BUDGETING
+    budget_data, budget_tips = generate_budget(category_data, income)
+
     return render_template(
         'index.html',
         transactions=transactions,
@@ -179,7 +202,9 @@ def index():
         balance=balance,
         category_data=category_data,
         insights=insights,
-        success=success
+        success=success,
+        budget_data=budget_data,      # ✅ NEW
+        budget_tips=budget_tips       # ✅ NEW
     )
 
 # 💳 M-PESA
@@ -245,7 +270,6 @@ def chat():
 
     user_message = request.form['message'].lower()
 
-    # 📊 USER DATA
     conn = sqlite3.connect(db_path)
     transactions = conn.execute(
         "SELECT * FROM transactions WHERE user_id=?",
@@ -257,7 +281,6 @@ def chat():
     expenses = sum(t[2] for t in transactions if t[3] == "expense")
     balance = income - expenses
 
-    # 🧠 FALLBACK AI
     def fallback_ai(msg):
         if "balance" in msg:
             return f"💰 Your current balance is Ksh {balance}"
@@ -274,7 +297,6 @@ def chat():
         else:
             return "🤖 Ask me about your balance, spending, or savings."
 
-    # 🤖 TRY REAL AI
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
