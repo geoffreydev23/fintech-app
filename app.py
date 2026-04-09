@@ -44,7 +44,7 @@ def generate_insights(transactions, income, expenses, category_data):
 
     return insights
 
-# 🧠 SMART AI BUDGETING (UPDATED)
+# 🧠 SMART AI BUDGETING
 def generate_budget(category_data, income, expenses):
     budget = {}
     tips = []
@@ -77,7 +77,6 @@ def generate_budget(category_data, income, expenses):
         else:
             tips.append(f"✅ Good balance in {category} spending.")
 
-    # Global advice
     if spending_ratio > 0.8:
         tips.append("🚨 You are spending too much overall.")
     elif spending_ratio > 0.5:
@@ -92,6 +91,47 @@ def generate_budget(category_data, income, expenses):
         tips.append("⚠️ No savings detected.")
 
     return budget, tips
+
+# 💯 FINANCIAL SCORE (NEW)
+def calculate_financial_score(income, expenses):
+    if income == 0:
+        return 0, "⚠️ No income data"
+
+    score = 50
+
+    ratio = expenses / income
+
+    if ratio < 0.5:
+        score += 25
+    elif ratio < 0.8:
+        score += 10
+    else:
+        score -= 20
+
+    savings = income - expenses
+
+    if savings > 0:
+        score += 15
+    else:
+        score -= 15
+
+    if savings > income * 0.2:
+        score += 10
+    elif savings < 0:
+        score -= 20
+
+    score = max(0, min(100, score))
+
+    if score >= 80:
+        status = "🔥 Excellent"
+    elif score >= 60:
+        status = "👍 Good"
+    elif score >= 40:
+        status = "⚠️ Average"
+    else:
+        status = "🚨 Poor"
+
+    return score, status
 
 # 🗄️ INIT DB
 def init_db():
@@ -220,8 +260,10 @@ def index():
 
     insights = generate_insights(transactions, income, expenses, category_data)
 
-    # ✅ UPDATED HERE
     budget_data, budget_tips = generate_budget(category_data, income, expenses)
+
+    # ✅ NEW SCORE
+    score, score_status = calculate_financial_score(income, expenses)
 
     return render_template(
         'index.html',
@@ -233,7 +275,9 @@ def index():
         insights=insights,
         success=success,
         budget_data=budget_data,
-        budget_tips=budget_tips
+        budget_tips=budget_tips,
+        score=score,
+        score_status=score_status
     )
 
 # 💳 M-PESA
