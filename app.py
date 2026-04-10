@@ -71,24 +71,11 @@ def generate_budget(category_data, income, expenses):
         }
 
         if amount > recommended:
-            tips.append(f"⚠️ Reduce {category} spending. You're above safe limit.")
+            tips.append(f"⚠️ Reduce {category} spending.")
         elif amount < (recommended * 0.5):
-            tips.append(f"💡 You can safely spend more on {category}.")
+            tips.append(f"💡 You can spend more on {category}.")
         else:
-            tips.append(f"✅ Good balance in {category} spending.")
-
-    if spending_ratio > 0.8:
-        tips.append("🚨 You are spending too much overall.")
-    elif spending_ratio > 0.5:
-        tips.append("⚠️ Watch your spending.")
-    else:
-        tips.append("✅ Your spending is healthy.")
-
-    savings = income - expenses
-    if savings > 0:
-        tips.append(f"💰 You saved Ksh {savings}. Consider investing.")
-    else:
-        tips.append("⚠️ No savings detected.")
+            tips.append(f"✅ Good balance in {category}.")
 
     return budget, tips
 
@@ -114,68 +101,22 @@ def calculate_financial_score(income, expenses):
     else:
         score -= 15
 
-    if savings > income * 0.2:
-        score += 10
-    elif savings < 0:
-        score -= 20
-
     score = max(0, min(100, score))
 
-    if score >= 80:
-        status = "🔥 Excellent"
-    elif score >= 60:
-        status = "👍 Good"
-    elif score >= 40:
-        status = "⚠️ Average"
-    else:
-        status = "🚨 Poor"
+    return score, "🔥 Excellent" if score >= 80 else "👍 Good" if score >= 60 else "⚠️ Average"
 
-    return score, status
-
-# 🎯 SAVINGS GOAL SYSTEM (NEW)
+# 🎯 SAVINGS GOAL
 def generate_savings_goal(income, expenses):
     savings = income - expenses
+    target = income * 0.2 if income > 0 else 0
 
-    if income == 0:
-        return {
-            "status": "⚠️ No income data",
-            "saved": 0,
-            "target": 0,
-            "progress": 0,
-            "message": "Add income to start saving."
-        }
-
-    target = income * 0.2
-
-    if savings <= 0:
-        return {
-            "status": "❌ No savings",
-            "saved": 0,
-            "target": round(target, 2),
-            "progress": 0,
-            "message": "Try reducing expenses to start saving."
-        }
-
-    progress = (savings / target) * 100 if target > 0 else 0
+    progress = (savings / target * 100) if target > 0 else 0
     progress = min(progress, 100)
 
-    if progress >= 100:
-        status = "🎉 Goal Achieved"
-        message = "Excellent! Consider investing your extra savings."
-    elif progress >= 50:
-        status = "👍 Good Progress"
-        message = "You're halfway there. Keep going!"
-    else:
-        status = "⚠️ Needs Improvement"
-        remaining = target - savings
-        message = f"Save Ksh {round(remaining, 2)} more to reach your goal."
-
     return {
-        "status": status,
         "saved": round(savings, 2),
         "target": round(target, 2),
-        "progress": round(progress, 2),
-        "message": message
+        "progress": round(progress, 2)
     }
 
 # 🗄️ INIT DB
@@ -202,18 +143,6 @@ def init_db():
         )
     ''')
 
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS archived_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            amount REAL,
-            type TEXT,
-            category TEXT,
-            source TEXT,
-            description TEXT
-        )
-    ''')
-
     conn.close()
 
 # 📝 REGISTER
@@ -223,15 +152,19 @@ def register():
         username = request.form['username']
         password = generate_password_hash(request.form['password'])
 
-        conn = sqlite3.connect(db_path)
-        conn.execute(
-            "INSERT INTO users (username, password) VALUES (?, ?)",
-            (username, password)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                "INSERT INTO users (username, password) VALUES (?, ?)",
+                (username, password)
+            )
+            conn.commit()
+            conn.close()
 
-        return redirect('/login')
+            return redirect('/login')
+
+        except:
+            return render_template("register.html", error="Username already exists")
 
     return render_template('register.html')
 
@@ -253,7 +186,7 @@ def login():
             session['user_id'] = user[0]
             return redirect('/')
         else:
-            return "Invalid login"
+            return render_template("login.html", error="Invalid username or password")
 
     return render_template('login.html')
 
@@ -269,12 +202,10 @@ def index():
     if 'user_id' not in session:
         return redirect('/login')
 
-    success = request.args.get('success')
-
     conn = sqlite3.connect(db_path)
 
     if request.method == 'POST':
-        amount = request.form['amount']
+        amount = float(request.form['amount'])  # ✅ FIXED
         t_type = request.form['type']
         source = request.form['source']
         desc = request.form['description']
@@ -304,12 +235,8 @@ def index():
         category_data[cat] = category_data.get(cat, 0) + t[2]
 
     insights = generate_insights(transactions, income, expenses, category_data)
-
     budget_data, budget_tips = generate_budget(category_data, income, expenses)
-
     score, score_status = calculate_financial_score(income, expenses)
-
-    # 🎯 NEW SAVINGS GOAL
     savings_goal = generate_savings_goal(income, expenses)
 
     return render_template(
@@ -320,7 +247,6 @@ def index():
         balance=balance,
         category_data=category_data,
         insights=insights,
-        success=success,
         budget_data=budget_data,
         budget_tips=budget_tips,
         score=score,

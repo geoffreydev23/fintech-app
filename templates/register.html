@@ -42,6 +42,11 @@
             color: white;
             font-weight: bold;
             border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #16a34a;
         }
 
         a {
@@ -52,12 +57,38 @@
         p {
             text-align: center;
         }
+
+        .error {
+            background: #ef4444;
+            padding: 8px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .success {
+            background: #22c55e;
+            padding: 8px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
 
 <div class="box">
     <h2>📝 Register</h2>
+
+    <!-- 🔴 ERROR MESSAGE -->
+    {% if error %}
+        <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <!-- 🟢 SUCCESS MESSAGE (optional) -->
+    {% if success %}
+        <div class="success">{{ success }}</div>
+    {% endif %}
 
     <form method="POST">
         <input name="username" placeholder="Username" required>

@@ -61,6 +61,12 @@
             background: blue;
         }
 
+        /* 🔴 Logout button */
+        .logout-btn {
+            background: #ef4444;
+            margin-bottom: 10px;
+        }
+
         .summary, .chart-container, .card {
             background: #1e293b;
             padding: 15px;
@@ -111,9 +117,13 @@
 
 <div class="container">
 
+    <!-- 🔴 LOGOUT BUTTON -->
+    <a href="/logout">
+        <button class="logout-btn">🚪 Logout</button>
+    </a>
+
     <h1>💰 Smart Finance Tracker</h1>
 
-    <!-- ✅ SUCCESS MESSAGE -->
     {% if success == "mpesa" %}
         <div style="background: green; padding:10px; border-radius:8px; margin-bottom:10px;">
             ✅ M-Pesa payment successful!
@@ -142,7 +152,6 @@
         <p>Target: Ksh {{savings_goal.target}}</p>
         <p>Status: {{savings_goal.status}}</p>
 
-        <!-- Progress Bar -->
         <div class="progress-bar">
             <div class="progress-fill"></div>
         </div>
@@ -197,7 +206,7 @@
         <button type="submit" onclick="showLoading(this)">Add Transaction</button>
     </form>
 
-    <!-- 💳 M-PESA DEPOSIT -->
+    <!-- 💳 M-PESA -->
     <div class="summary">
         <h3>💳 M-Pesa Deposit</h3>
 
@@ -243,26 +252,24 @@
 
 </div>
 
-<!-- 📊 CHART SCRIPT -->
 <script>
-    const data = {{ category_data | tojson }};
-    const labels = Object.keys(data);
-    const values = Object.values(data);
+const data = {{ category_data | tojson }};
+const labels = Object.keys(data);
+const values = Object.values(data);
 
-    const ctx = document.getElementById('myChart').getContext('2d');
+const ctx = document.getElementById('myChart').getContext('2d');
 
-    new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: values
-            }]
-        }
-    });
+new Chart(ctx, {
+    type: 'pie',
+    data: {
+        labels: labels,
+        datasets: [{
+            data: values
+        }]
+    }
+});
 </script>
 
-<!-- 🔄 LOADING SCRIPT -->
 <script>
 function showLoading(btn) {
     btn.innerText = "Processing...";
@@ -270,7 +277,6 @@ function showLoading(btn) {
 }
 </script>
 
-<!-- 🤖 CHATBOT SCRIPT -->
 <script>
 function sendMessage() {
     let input = document.getElementById("userInput");
@@ -296,7 +302,6 @@ function sendMessage() {
 }
 </script>
 
-<!-- 📱 SERVICE WORKER -->
 <script>
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/static/service-worker.js")
