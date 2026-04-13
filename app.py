@@ -2,13 +2,23 @@ from flask import Flask, render_template, request, redirect, session
 import sqlite3
 import os
 from werkzeug.security import generate_password_hash, check_password_hash
-from openai import OpenAI
+
+# ✅ SAFE OPENAI IMPORT
+try:
+    from openai import OpenAI
+except:
+    OpenAI = None
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# 🔐 SECURE API KEY
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# 🔐 SAFE API KEY HANDLING (FIXED)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+if OPENAI_API_KEY and OpenAI:
+    client = OpenAI(api_key=OPENAI_API_KEY)
+else:
+    client = None
 
 # 📁 DATABASE PATH
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -190,6 +200,33 @@ def login():
 
     return render_template('login.html')
 
+# 🔑 PASSWORD RESET (NEW)
+@app.route('/reset', methods=['GET', 'POST'])
+def reset_password():
+    if request.method == 'POST':
+        username = request.form['username']
+        new_password = generate_password_hash(request.form['password'])
+
+        conn = sqlite3.connect(db_path)
+        user = conn.execute(
+            "SELECT * FROM users WHERE username=?",
+            (username,)
+        ).fetchone()
+
+        if user:
+            conn.execute(
+                "UPDATE users SET password=? WHERE username=?",
+                (new_password, username)
+            )
+            conn.commit()
+            conn.close()
+            return redirect('/login')
+        else:
+            conn.close()
+            return render_template("reset.html", error="User not found")
+
+    return render_template('reset.html')
+
 # 🚪 LOGOUT
 @app.route('/logout')
 def logout():
@@ -205,7 +242,7 @@ def index():
     conn = sqlite3.connect(db_path)
 
     if request.method == 'POST':
-        amount = float(request.form['amount'])  # ✅ FIXED
+        amount = float(request.form['amount'])
         t_type = request.form['type']
         source = request.form['source']
         desc = request.form['description']

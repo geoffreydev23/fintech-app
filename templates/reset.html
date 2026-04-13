@@ -1,8 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Login</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Password</title>
 
     <style>
         body {
@@ -22,10 +21,6 @@
             width: 300px;
         }
 
-        h2 {
-            text-align: center;
-        }
-
         input {
             width: 100%;
             padding: 10px;
@@ -37,62 +32,35 @@
         button {
             width: 100%;
             padding: 10px;
-            background: #22c55e;
+            background: orange;
             border: none;
             color: white;
             font-weight: bold;
             border-radius: 5px;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #16a34a;
-        }
-
-        a {
-            color: lightblue;
-            text-decoration: none;
         }
 
         p {
             text-align: center;
-        }
-
-        .error {
-            background: #ef4444;
-            padding: 8px;
-            border-radius: 5px;
-            text-align: center;
-            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
 
 <div class="box">
-    <h2>🔐 Login</h2>
+    <h2>🔑 Reset Password</h2>
 
-    <!-- 🔴 ERROR MESSAGE -->
     {% if error %}
-        <div class="error">{{ error }}</div>
+        <p style="color:red;">{{error}}</p>
     {% endif %}
 
     <form method="POST">
         <input name="username" placeholder="Username" required>
-        <input name="password" type="password" placeholder="Password" required>
+        <input name="password" type="password" placeholder="New Password" required>
 
-        <button type="submit">Login</button>
+        <button type="submit">Reset Password</button>
     </form>
 
-    <!-- 🔑 NEW: RESET PASSWORD LINK -->
-    <p>
-        <a href="/reset">Forgot Password?</a>
-    </p>
-
-    <p>
-        Don’t have an account?
-        <a href="/register">Register</a>
-    </p>
+    <p><a href="/login">Back to Login</a></p>
 </div>
 
 </body>
