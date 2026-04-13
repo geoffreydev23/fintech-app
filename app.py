@@ -1,6 +1,8 @@
-from flask import Flask, render_template, request, redirect, session
+from flask import Flask, render_template, request, redirect, session, url_for
 import sqlite3
 import os
+import secrets
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # ✅ SAFE OPENAI IMPORT
@@ -12,7 +14,7 @@ except:
 app = Flask(__name__)
 app.secret_key = "secret123"
 
-# 🔐 SAFE API KEY HANDLING (FIXED)
+# 🔐 SAFE API KEY HANDLING
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if OPENAI_API_KEY and OpenAI:
@@ -129,7 +131,7 @@ def generate_savings_goal(income, expenses):
         "progress": round(progress, 2)
     }
 
-# 🗄️ INIT DB
+# 🗄️ INIT DB (UPDATED)
 def init_db():
     conn = sqlite3.connect(db_path)
 
@@ -137,7 +139,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
-            password TEXT
+            password TEXT,
+            reset_token TEXT,
+            token_expiry TEXT
         )
     ''')
 
@@ -200,12 +204,11 @@ def login():
 
     return render_template('login.html')
 
-# 🔑 PASSWORD RESET (NEW)
-@app.route('/reset', methods=['GET', 'POST'])
-def reset_password():
+# 🔑 REQUEST RESET (STEP 3)
+@app.route('/request-reset', methods=['GET', 'POST'])
+def request_reset():
     if request.method == 'POST':
         username = request.form['username']
-        new_password = generate_password_hash(request.form['password'])
 
         conn = sqlite3.connect(db_path)
         user = conn.execute(
@@ -214,18 +217,59 @@ def reset_password():
         ).fetchone()
 
         if user:
+            token = secrets.token_urlsafe(32)
+            expiry = datetime.utcnow() + timedelta(minutes=15)
+
             conn.execute(
-                "UPDATE users SET password=? WHERE username=?",
-                (new_password, username)
+                "UPDATE users SET reset_token=?, token_expiry=? WHERE username=?",
+                (token, expiry.isoformat(), username)
             )
             conn.commit()
             conn.close()
-            return redirect('/login')
-        else:
-            conn.close()
-            return render_template("reset.html", error="User not found")
 
-    return render_template('reset.html')
+            # 🔗 Simulated reset link (normally email)
+            reset_link = url_for('reset_with_token', token=token, _external=True)
+
+            return f"Reset link: {reset_link}"
+
+        conn.close()
+        return render_template("reset_request.html", error="User not found")
+
+    return render_template("reset_request.html")
+
+# 🔒 SECURE RESET WITH TOKEN (STEP 4)
+@app.route('/reset/<token>', methods=['GET', 'POST'])
+def reset_with_token(token):
+    conn = sqlite3.connect(db_path)
+    user = conn.execute(
+        "SELECT * FROM users WHERE reset_token=?",
+        (token,)
+    ).fetchone()
+
+    if not user:
+        conn.close()
+        return "Invalid or expired token"
+
+    expiry = datetime.fromisoformat(user[4])
+
+    if datetime.utcnow() > expiry:
+        conn.close()
+        return "Token expired"
+
+    if request.method == 'POST':
+        new_password = generate_password_hash(request.form['password'])
+
+        conn.execute(
+            "UPDATE users SET password=?, reset_token=NULL, token_expiry=NULL WHERE id=?",
+            (new_password, user[0])
+        )
+        conn.commit()
+        conn.close()
+
+        return redirect('/login')
+
+    conn.close()
+    return render_template("reset.html")
 
 # 🚪 LOGOUT
 @app.route('/logout')

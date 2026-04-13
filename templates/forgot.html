@@ -1,0 +1,11 @@
+<div class="box">
+    <h2>🔑 Forgot Password</h2>
+
+    {% if error %}<p style="color:red;">{{error}}</p>{% endif %}
+    {% if message %}<p style="color:lightgreen;">{{message}}</p>{% endif %}
+
+    <form method="POST">
+        <input name="username" placeholder="Username" required>
+        <button type="submit">Send Reset Link</button>
+    </form>
+</div>
