@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, session, url_for
 import sqlite3
 import os
 import secrets
+import random
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -12,19 +13,23 @@ except:
     OpenAI = None
 
 app = Flask(__name__)
-app.secret_key = "secret123"
+app.secret_key = "super_secret_key_change_this"
 
-# 🔐 SAFE API KEY HANDLING
+# 🔐 SAFE API KEY
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY and OpenAI else None
 
-if OPENAI_API_KEY and OpenAI:
-    client = OpenAI(api_key=OPENAI_API_KEY)
-else:
-    client = None
-
-# 📁 DATABASE PATH
+# 📁 DATABASE
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_path = os.path.join(BASE_DIR, 'database.db')
+
+# 🔐 PASSWORD STRENGTH
+def is_strong_password(password):
+    return (
+        len(password) >= 8 and
+        any(c.isupper() for c in password) and
+        any(c.isdigit() for c in password)
+    )
 
 # 🧠 AUTO CATEGORY
 def auto_category(desc):
@@ -56,26 +61,18 @@ def generate_insights(transactions, income, expenses, category_data):
 
     return insights
 
-# 🧠 SMART AI BUDGETING
+# 🧠 BUDGETING
 def generate_budget(category_data, income, expenses):
     budget = {}
     tips = []
 
     if income == 0:
-        return {}, ["⚠️ Add income to generate a budget"]
+        return {}, ["⚠️ Add income"]
 
     spending_ratio = expenses / income if income > 0 else 0
 
     for category, amount in category_data.items():
-
-        if spending_ratio > 0.8:
-            recommended_pct = 0.15
-        elif spending_ratio > 0.5:
-            recommended_pct = 0.25
-        else:
-            recommended_pct = 0.35
-
-        recommended = income * recommended_pct
+        recommended = income * 0.3
 
         budget[category] = {
             "spent": amount,
@@ -83,18 +80,16 @@ def generate_budget(category_data, income, expenses):
         }
 
         if amount > recommended:
-            tips.append(f"⚠️ Reduce {category} spending.")
-        elif amount < (recommended * 0.5):
-            tips.append(f"💡 You can spend more on {category}.")
+            tips.append(f"⚠️ Reduce {category}")
         else:
-            tips.append(f"✅ Good balance in {category}.")
+            tips.append(f"✅ Good {category}")
 
     return budget, tips
 
-# 💯 FINANCIAL SCORE
+# 💯 SCORE
 def calculate_financial_score(income, expenses):
     if income == 0:
-        return 0, "⚠️ No income data"
+        return 0, "⚠️ No income"
 
     score = 50
     ratio = expenses / income
@@ -107,21 +102,18 @@ def calculate_financial_score(income, expenses):
         score -= 20
 
     savings = income - expenses
-
     if savings > 0:
         score += 15
-    else:
-        score -= 15
 
     score = max(0, min(100, score))
 
-    return score, "🔥 Excellent" if score >= 80 else "👍 Good" if score >= 60 else "⚠️ Average"
+    status = "🔥 Excellent" if score >= 80 else "👍 Good" if score >= 60 else "⚠️ Average"
+    return score, status
 
-# 🎯 SAVINGS GOAL
+# 🎯 SAVINGS
 def generate_savings_goal(income, expenses):
     savings = income - expenses
     target = income * 0.2 if income > 0 else 0
-
     progress = (savings / target * 100) if target > 0 else 0
     progress = min(progress, 100)
 
@@ -131,7 +123,7 @@ def generate_savings_goal(income, expenses):
         "progress": round(progress, 2)
     }
 
-# 🗄️ INIT DB (UPDATED)
+# 🗄️ INIT DB
 def init_db():
     conn = sqlite3.connect(db_path)
 
@@ -141,7 +133,9 @@ def init_db():
             username TEXT UNIQUE,
             password TEXT,
             reset_token TEXT,
-            token_expiry TEXT
+            token_expiry TEXT,
+            otp TEXT,
+            otp_expiry TEXT
         )
     ''')
 
@@ -164,104 +158,111 @@ def init_db():
 def register():
     if request.method == 'POST':
         username = request.form['username']
-        password = generate_password_hash(request.form['password'])
+        password = request.form['password']
+
+        if not is_strong_password(password):
+            return render_template("register.html", error="Weak password")
+
+        hashed = generate_password_hash(password)
 
         try:
             conn = sqlite3.connect(db_path)
-            conn.execute(
-                "INSERT INTO users (username, password) VALUES (?, ?)",
-                (username, password)
-            )
+            conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed))
             conn.commit()
             conn.close()
-
             return redirect('/login')
-
         except:
-            return render_template("register.html", error="Username already exists")
+            return render_template("register.html", error="Username exists")
 
     return render_template('register.html')
 
-# 🔐 LOGIN
+# 🔐 LOGIN + RATE LIMIT
+login_attempts = {}
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    ip = request.remote_addr
+
+    if login_attempts.get(ip, 0) >= 5:
+        return "Too many attempts. Try later."
+
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
 
         conn = sqlite3.connect(db_path)
-        user = conn.execute(
-            "SELECT * FROM users WHERE username=?",
-            (username,)
-        ).fetchone()
+        user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
         conn.close()
 
         if user and check_password_hash(user[2], password):
             session['user_id'] = user[0]
+            login_attempts[ip] = 0
             return redirect('/')
         else:
-            return render_template("login.html", error="Invalid username or password")
+            login_attempts[ip] = login_attempts.get(ip, 0) + 1
+            return render_template("login.html", error="Invalid login")
 
     return render_template('login.html')
 
-# 🔑 REQUEST RESET (STEP 3)
+# 🔑 REQUEST RESET
 @app.route('/request-reset', methods=['GET', 'POST'])
 def request_reset():
     if request.method == 'POST':
         username = request.form['username']
 
         conn = sqlite3.connect(db_path)
-        user = conn.execute(
-            "SELECT * FROM users WHERE username=?",
-            (username,)
-        ).fetchone()
+        user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
 
         if user:
             token = secrets.token_urlsafe(32)
-            expiry = datetime.utcnow() + timedelta(minutes=15)
+            otp = str(random.randint(100000, 999999))
+            expiry = datetime.utcnow() + timedelta(minutes=10)
 
             conn.execute(
-                "UPDATE users SET reset_token=?, token_expiry=? WHERE username=?",
-                (token, expiry.isoformat(), username)
+                "UPDATE users SET reset_token=?, token_expiry=?, otp=?, otp_expiry=? WHERE username=?",
+                (token, expiry.isoformat(), otp, expiry.isoformat(), username)
             )
             conn.commit()
             conn.close()
 
-            # 🔗 Simulated reset link (normally email)
-            reset_link = url_for('reset_with_token', token=token, _external=True)
+            link = url_for('reset_with_token', token=token, _external=True)
 
-            return f"Reset link: {reset_link}"
+            return f"Reset Link: {link} | OTP: {otp}"
 
         conn.close()
-        return render_template("reset_request.html", error="User not found")
+        return "User not found"
 
     return render_template("reset_request.html")
 
-# 🔒 SECURE RESET WITH TOKEN (STEP 4)
+# 🔒 RESET WITH TOKEN + OTP
 @app.route('/reset/<token>', methods=['GET', 'POST'])
 def reset_with_token(token):
     conn = sqlite3.connect(db_path)
-    user = conn.execute(
-        "SELECT * FROM users WHERE reset_token=?",
-        (token,)
-    ).fetchone()
+    user = conn.execute("SELECT * FROM users WHERE reset_token=?", (token,)).fetchone()
 
     if not user:
-        conn.close()
-        return "Invalid or expired token"
+        return "Invalid token"
 
     expiry = datetime.fromisoformat(user[4])
+    otp_expiry = datetime.fromisoformat(user[6])
 
-    if datetime.utcnow() > expiry:
-        conn.close()
-        return "Token expired"
+    if datetime.utcnow() > expiry or datetime.utcnow() > otp_expiry:
+        return "Expired"
 
     if request.method == 'POST':
-        new_password = generate_password_hash(request.form['password'])
+        if request.form['otp'] != user[5]:
+            return "Wrong OTP"
+
+        password = request.form['password']
+
+        if not is_strong_password(password):
+            return "Weak password"
+
+        hashed = generate_password_hash(password)
 
         conn.execute(
-            "UPDATE users SET password=?, reset_token=NULL, token_expiry=NULL WHERE id=?",
-            (new_password, user[0])
+            "UPDATE users SET password=?, reset_token=NULL, otp=NULL WHERE id=?",
+            (hashed, user[0])
         )
         conn.commit()
         conn.close()
@@ -290,7 +291,6 @@ def index():
         t_type = request.form['type']
         source = request.form['source']
         desc = request.form['description']
-
         category = request.form['category'] or auto_category(desc)
 
         conn.execute(
@@ -299,11 +299,7 @@ def index():
         )
         conn.commit()
 
-    transactions = conn.execute(
-        "SELECT * FROM transactions WHERE user_id=?",
-        (session['user_id'],)
-    ).fetchall()
-
+    transactions = conn.execute("SELECT * FROM transactions WHERE user_id=?", (session['user_id'],)).fetchall()
     conn.close()
 
     income = sum(t[2] for t in transactions if t[3] == "income")
@@ -312,8 +308,7 @@ def index():
 
     category_data = {}
     for t in transactions:
-        cat = t[4]
-        category_data[cat] = category_data.get(cat, 0) + t[2]
+        category_data[t[4]] = category_data.get(t[4], 0) + t[2]
 
     insights = generate_insights(transactions, income, expenses, category_data)
     budget_data, budget_tips = generate_budget(category_data, income, expenses)
