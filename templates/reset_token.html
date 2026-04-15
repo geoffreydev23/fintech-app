@@ -2,7 +2,15 @@
     <h2>🔐 Set New Password</h2>
 
     <form method="POST">
+        <!-- ✅ CSRF TOKEN -->
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+        <!-- 🔢 OTP FIELD (ADDED) -->
+        <input name="otp" placeholder="Enter 6-digit OTP" maxlength="6" required>
+
+        <!-- 🔐 PASSWORD FIELD (UNCHANGED) -->
         <input name="password" type="password" placeholder="New Password" required>
+
         <button type="submit">Update Password</button>
     </form>
 </div>

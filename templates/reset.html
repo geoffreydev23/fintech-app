@@ -54,7 +54,12 @@
     {% endif %}
 
     <form method="POST">
-        <input name="username" placeholder="Username" required>
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+        <!-- ✅ OTP ONLY -->
+        <input name="otp" placeholder="6-digit OTP" maxlength="6" required>
+
+        <!-- ✅ NEW PASSWORD -->
         <input name="password" type="password" placeholder="New Password" required>
 
         <button type="submit">Reset Password</button>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session, url_for
+from flask import Flask, render_template, request, redirect, session, url_for, abort
 import sqlite3
 import os
 import secrets
@@ -15,6 +15,14 @@ except:
 app = Flask(__name__)
 app.secret_key = "super_secret_key_change_this"
 
+# 🔐 SESSION SECURITY
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=False,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=timedelta(minutes=15)
+)
+
 # 🔐 SAFE API KEY
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY and OpenAI else None
@@ -22,6 +30,31 @@ client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY and OpenAI else None
 # 📁 DATABASE
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_path = os.path.join(BASE_DIR, 'database.db')
+
+# 🔐 CSRF TOKEN
+def generate_csrf_token():
+    if "_csrf_token" not in session:
+        session["_csrf_token"] = secrets.token_hex(16)
+    return session["_csrf_token"]
+
+@app.before_request
+def csrf_protect():
+    if request.method == "POST":
+        token = session.get("_csrf_token")
+        form_token = request.form.get("_csrf_token")
+        if not token or token != form_token:
+            abort(403)
+
+app.jinja_env.globals['csrf_token'] = generate_csrf_token
+
+# 🔐 SECURITY HEADERS
+@app.after_request
+def set_security_headers(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
 
 # 🔐 PASSWORD STRENGTH
 def is_strong_password(password):
@@ -34,7 +67,6 @@ def is_strong_password(password):
 # 🧠 AUTO CATEGORY
 def auto_category(desc):
     desc = desc.lower()
-
     if "food" in desc or "restaurant" in desc:
         return "Food"
     elif "uber" in desc or "bolt" in desc or "matatu" in desc:
@@ -51,14 +83,12 @@ def auto_category(desc):
 # 🤖 AI INSIGHTS
 def generate_insights(transactions, income, expenses, category_data):
     insights = []
-
     if expenses > income:
         insights.append("⚠️ Your expenses exceed your income")
 
     for category, amount in category_data.items():
         if expenses > 0 and amount > (expenses * 0.4):
             insights.append(f"⚠️ High spending on {category}")
-
     return insights
 
 # 🧠 BUDGETING
@@ -69,11 +99,8 @@ def generate_budget(category_data, income, expenses):
     if income == 0:
         return {}, ["⚠️ Add income"]
 
-    spending_ratio = expenses / income if income > 0 else 0
-
     for category, amount in category_data.items():
         recommended = income * 0.3
-
         budget[category] = {
             "spent": amount,
             "recommended": round(recommended, 2)
@@ -106,7 +133,6 @@ def calculate_financial_score(income, expenses):
         score += 15
 
     score = max(0, min(100, score))
-
     status = "🔥 Excellent" if score >= 80 else "👍 Good" if score >= 60 else "⚠️ Average"
     return score, status
 
@@ -151,6 +177,19 @@ def init_db():
         )
     ''')
 
+    # ✅ ADD ARCHIVE TABLE (NEW)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS archived_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            amount REAL,
+            type TEXT,
+            category TEXT,
+            source TEXT,
+            description TEXT
+        )
+    ''')
+
     conn.close()
 
 # 📝 REGISTER
@@ -176,7 +215,7 @@ def register():
 
     return render_template('register.html')
 
-# 🔐 LOGIN + RATE LIMIT
+# 🔐 LOGIN
 login_attempts = {}
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -195,7 +234,9 @@ def login():
         conn.close()
 
         if user and check_password_hash(user[2], password):
+            session.clear()
             session['user_id'] = user[0]
+            session.permanent = True
             login_attempts[ip] = 0
             return redirect('/')
         else:
@@ -226,7 +267,6 @@ def request_reset():
             conn.close()
 
             link = url_for('reset_with_token', token=token, _external=True)
-
             return f"Reset Link: {link} | OTP: {otp}"
 
         conn.close()
@@ -241,27 +281,35 @@ def reset_with_token(token):
     user = conn.execute("SELECT * FROM users WHERE reset_token=?", (token,)).fetchone()
 
     if not user:
+        conn.close()
         return "Invalid token"
 
     expiry = datetime.fromisoformat(user[4])
     otp_expiry = datetime.fromisoformat(user[6])
 
     if datetime.utcnow() > expiry or datetime.utcnow() > otp_expiry:
+        conn.close()
         return "Expired"
 
     if request.method == 'POST':
-        if request.form['otp'] != user[5]:
+        otp_input = request.form.get('otp', '').strip()
+
+        # ✅ SAFE OTP CHECK (IMPROVED)
+        if not otp_input or otp_input != user[5]:
+            conn.close()
             return "Wrong OTP"
 
         password = request.form['password']
 
         if not is_strong_password(password):
+            conn.close()
             return "Weak password"
 
         hashed = generate_password_hash(password)
 
+        # ✅ CLEAR ALL RESET DATA (SECURITY FIX)
         conn.execute(
-            "UPDATE users SET password=?, reset_token=NULL, otp=NULL WHERE id=?",
+            "UPDATE users SET password=?, reset_token=NULL, otp=NULL, token_expiry=NULL, otp_expiry=NULL WHERE id=?",
             (hashed, user[0])
         )
         conn.commit()
@@ -271,6 +319,30 @@ def reset_with_token(token):
 
     conn.close()
     return render_template("reset.html")
+
+# 🔄 RESTORE (NEW SECURE ROUTE)
+@app.route('/restore/<int:id>', methods=['POST'])
+def restore(id):
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    conn = sqlite3.connect(db_path)
+
+    t = conn.execute(
+        "SELECT * FROM archived_transactions WHERE id=? AND user_id=?",
+        (id, session['user_id'])
+    ).fetchone()
+
+    if t:
+        conn.execute(
+            "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
+            (t[1], t[2], t[3], t[4], t[5], t[6])
+        )
+        conn.execute("DELETE FROM archived_transactions WHERE id=?", (id,))
+        conn.commit()
+
+    conn.close()
+    return redirect('/archive')
 
 # 🚪 LOGOUT
 @app.route('/logout')

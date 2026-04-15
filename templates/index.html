@@ -61,7 +61,6 @@
             background: blue;
         }
 
-        /* 🔴 Logout button */
         .logout-btn {
             background: #ef4444;
             margin-bottom: 10px;
@@ -74,7 +73,6 @@
             margin-top: 10px;
         }
 
-        /* 🎯 Progress Bar */
         .progress-bar {
             background: #334155;
             border-radius: 10px;
@@ -89,7 +87,6 @@
             width: {{ savings_goal.progress }}%;
         }
 
-        /* 🤖 Chat UI */
         .chat-user {
             background: #22c55e;
             padding: 8px;
@@ -130,21 +127,18 @@
         </div>
     {% endif %}
 
-    <!-- 📊 SUMMARY -->
     <div class="summary">
         <p>💰 Income: Ksh {{income}}</p>
         <p>💸 Expenses: Ksh {{expenses}}</p>
         <p>⚖️ Balance: Ksh {{balance}}</p>
     </div>
 
-    <!-- 💯 FINANCIAL SCORE -->
     <div class="summary">
         <h3>💯 Financial Score</h3>
         <h2>{{score}} / 100</h2>
         <p>{{score_status}}</p>
     </div>
 
-    <!-- 🎯 SAVINGS GOAL -->
     <div class="summary">
         <h3>🎯 Savings Goal</h3>
 
@@ -160,12 +154,10 @@
         <p>{{savings_goal.message}}</p>
     </div>
 
-    <!-- 📊 CHART -->
     <div class="chart-container">
         <canvas id="myChart"></canvas>
     </div>
 
-    <!-- 🤖 AI INSIGHTS -->
     <div class="summary">
         <h3>🤖 AI Insights</h3>
         {% for insight in insights %}
@@ -173,7 +165,6 @@
         {% endfor %}
     </div>
 
-    <!-- 💰 AI BUDGETING -->
     <div class="summary">
         <h3>📊 AI Budgeting</h3>
 
@@ -192,6 +183,8 @@
 
     <!-- 📝 ADD TRANSACTION -->
     <form method="POST">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
         <input name="amount" placeholder="Amount" required>
 
         <select name="type">
@@ -211,6 +204,8 @@
         <h3>💳 M-Pesa Deposit</h3>
 
         <form method="POST" action="/mpesa">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
             <input name="phone" placeholder="Phone Number (07XXXXXXXX)" required>
             <input name="amount" placeholder="Amount" required>
 
@@ -220,15 +215,15 @@
 
     <!-- 🗑️ CLEAR -->
     <form method="POST" action="/clear">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
         <button class="danger" onclick="showLoading(this)">🗑️ Clear All Data</button>
     </form>
 
-    <!-- 📂 ARCHIVE -->
     <a href="/archive">
         <button class="archive-btn">📂 View Archive</button>
     </a>
 
-    <!-- 📋 TRANSACTIONS -->
     <div>
         <h2>Transactions</h2>
         {% for t in transactions %}
@@ -240,7 +235,6 @@
         {% endfor %}
     </div>
 
-    <!-- 🤖 CHATBOT -->
     <div class="summary">
         <h3>🤖 AI Assistant</h3>
 
