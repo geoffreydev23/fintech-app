@@ -3,6 +3,8 @@ import sqlite3
 import os
 import secrets
 import random
+import smtplib
+from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -22,6 +24,24 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=15)
 )
+
+# 🔐 EMAIL CONFIG (NEW)
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
+# 📧 SEND EMAIL FUNCTION (NEW)
+def send_email(to_email, subject, message):
+    msg = MIMEText(message)
+    msg['Subject'] = subject
+    msg['From'] = EMAIL_ADDRESS
+    msg['To'] = to_email
+
+    try:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(msg)
+    except Exception as e:
+        print("Email error:", e)
 
 # 🔐 SAFE API KEY
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -177,7 +197,6 @@ def init_db():
         )
     ''')
 
-    # ✅ ADD ARCHIVE TABLE (NEW)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS archived_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -245,7 +264,7 @@ def login():
 
     return render_template('login.html')
 
-# 🔑 REQUEST RESET
+# 🔑 REQUEST RESET (UPDATED WITH EMAIL)
 @app.route('/request-reset', methods=['GET', 'POST'])
 def request_reset():
     if request.method == 'POST':
@@ -267,14 +286,30 @@ def request_reset():
             conn.close()
 
             link = url_for('reset_with_token', token=token, _external=True)
-            return f"Reset Link: {link} | OTP: {otp}"
+
+            # 📧 SEND EMAIL INSTEAD OF SHOWING
+            message = f"""
+Password Reset Request
+
+Click the link below:
+{link}
+
+Your OTP Code:
+{otp}
+
+This will expire in 10 minutes.
+"""
+
+            send_email(username, "Password Reset - Fintech App", message)
+
+            return "Reset link and OTP sent to your email."
 
         conn.close()
         return "User not found"
 
     return render_template("reset_request.html")
 
-# 🔒 RESET WITH TOKEN + OTP
+# 🔒 RESET WITH TOKEN + OTP (UNCHANGED - ALREADY SECURE)
 @app.route('/reset/<token>', methods=['GET', 'POST'])
 def reset_with_token(token):
     conn = sqlite3.connect(db_path)
@@ -294,7 +329,6 @@ def reset_with_token(token):
     if request.method == 'POST':
         otp_input = request.form.get('otp', '').strip()
 
-        # ✅ SAFE OTP CHECK (IMPROVED)
         if not otp_input or otp_input != user[5]:
             conn.close()
             return "Wrong OTP"
@@ -307,7 +341,6 @@ def reset_with_token(token):
 
         hashed = generate_password_hash(password)
 
-        # ✅ CLEAR ALL RESET DATA (SECURITY FIX)
         conn.execute(
             "UPDATE users SET password=?, reset_token=NULL, otp=NULL, token_expiry=NULL, otp_expiry=NULL WHERE id=?",
             (hashed, user[0])
@@ -320,7 +353,7 @@ def reset_with_token(token):
     conn.close()
     return render_template("reset.html")
 
-# 🔄 RESTORE (NEW SECURE ROUTE)
+# 🔄 RESTORE
 @app.route('/restore/<int:id>', methods=['POST'])
 def restore(id):
     if 'user_id' not in session:
