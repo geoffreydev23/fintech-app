@@ -7,7 +7,8 @@
     <form method="POST">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
-        <input name="username" placeholder="Username" required>
+        <input name="email" type="email" placeholder="Enter your email" required>
+
         <button type="submit">Send Reset Link</button>
     </form>
 </div>

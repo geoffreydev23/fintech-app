@@ -294,14 +294,14 @@ def login():
 
     return render_template('login.html')
 
-# 🔑 REQUEST RESET (UPDATED WITH EMAIL)
+# 🔑 REQUEST RESET (FIXED TO USE EMAIL)
 @app.route('/request-reset', methods=['GET', 'POST'])
 def request_reset():
     if request.method == 'POST':
-        username = request.form['username']
+        email = request.form['email']  # 🆕 GET EMAIL
 
         conn = sqlite3.connect(db_path)
-        user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        user = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
 
         if user:
             token = secrets.token_urlsafe(32)
@@ -309,15 +309,15 @@ def request_reset():
             expiry = datetime.utcnow() + timedelta(minutes=10)
 
             conn.execute(
-                "UPDATE users SET reset_token=?, token_expiry=?, otp=?, otp_expiry=? WHERE username=?",
-                (token, expiry.isoformat(), otp, expiry.isoformat(), username)
+                "UPDATE users SET reset_token=?, token_expiry=?, otp=?, otp_expiry=? WHERE email=?",
+                (token, expiry.isoformat(), otp, expiry.isoformat(), email)
             )
             conn.commit()
             conn.close()
 
             link = url_for('reset_with_token', token=token, _external=True)
 
-            # 📧 SEND EMAIL INSTEAD OF SHOWING
+            # 📧 SEND EMAIL TO REAL EMAIL
             message = f"""
 Password Reset Request
 
@@ -330,12 +330,12 @@ Your OTP Code:
 This will expire in 10 minutes.
 """
 
-            send_email(username, "Password Reset - Fintech App", message)
+            send_email(email, "Password Reset - Fintech App", message)
 
             return "Reset link and OTP sent to your email."
 
         conn.close()
-        return "User not found"
+        return "Email not found"
 
     return render_template("reset_request.html")
 
