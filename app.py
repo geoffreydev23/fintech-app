@@ -236,15 +236,31 @@ def register():
 
         try:
             conn = sqlite3.connect(db_path)
+
+            # 🔍 CHECK IF USERNAME OR EMAIL ALREADY EXISTS
+            existing_user = conn.execute(
+                "SELECT * FROM users WHERE username=? OR email=?",
+                (username, email)
+            ).fetchone()
+
+            if existing_user:
+                conn.close()
+                return render_template("register.html", error="Username or email already exists")
+
+            # ✅ INSERT NEW USER
             conn.execute(
                 "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
                 (username, email, hashed)
             )
+
             conn.commit()
             conn.close()
+
             return redirect('/login')
-        except:
-            return render_template("register.html", error="Username exists")
+
+        except Exception as e:
+            print("Register error:", e)
+            return render_template("register.html", error="Something went wrong")
 
     return render_template('register.html')
 
