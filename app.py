@@ -173,6 +173,7 @@ def generate_savings_goal(income, expenses):
 def init_db():
     conn = sqlite3.connect(db_path)
 
+    # 👤 USERS TABLE
     conn.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -185,6 +186,13 @@ def init_db():
         )
     ''')
 
+    # ✅ ADD EMAIL COLUMN SAFELY (WILL NOT BREAK EXISTING DB)
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    except:
+        pass
+
+    # 💰 TRANSACTIONS TABLE
     conn.execute('''
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -197,6 +205,7 @@ def init_db():
         )
     ''')
 
+    # 📂 ARCHIVED TRANSACTIONS
     conn.execute('''
         CREATE TABLE IF NOT EXISTS archived_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -209,6 +218,7 @@ def init_db():
         )
     ''')
 
+    conn.commit()  # ✅ IMPORTANT (ensures changes are saved)
     conn.close()
 
 # 📝 REGISTER
@@ -216,6 +226,7 @@ def init_db():
 def register():
     if request.method == 'POST':
         username = request.form['username']
+        email = request.form['email']  # 🆕 GET EMAIL
         password = request.form['password']
 
         if not is_strong_password(password):
@@ -225,7 +236,10 @@ def register():
 
         try:
             conn = sqlite3.connect(db_path)
-            conn.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed))
+            conn.execute(
+                "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
+                (username, email, hashed)
+            )
             conn.commit()
             conn.close()
             return redirect('/login')

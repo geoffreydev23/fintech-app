@@ -91,7 +91,11 @@
     {% endif %}
 
     <form method="POST">
+        <!-- 🔐 CSRF TOKEN -->
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+        <!-- 🆕 EMAIL FIELD -->
+        <input name="email" type="email" placeholder="Email Address" required>
 
         <input name="username" placeholder="Username" required>
         <input name="password" type="password" placeholder="Password" required>
