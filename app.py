@@ -8,6 +8,10 @@ from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# 🆕 LOAD ENV VARIABLES (PERMANENT FIX)
+from dotenv import load_dotenv
+load_dotenv()
+
 # ✅ SAFE OPENAI IMPORT
 try:
     from openai import OpenAI
@@ -37,11 +41,13 @@ def send_email(to_email, subject, message):
     msg['To'] = to_email
 
     try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.send_message(msg)
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+        print("✅ Email sent successfully")
     except Exception as e:
-        print("Email error:", e)
+        print("❌ Email error:", e)
 
 # 🔐 SAFE API KEY
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -298,6 +304,8 @@ def login():
 @app.route('/request-reset', methods=['GET', 'POST'])
 def request_reset():
     if request.method == 'POST':
+        print("EMAIL FROM FORM:", request.form)
+        
         email = request.form['email']  # 🆕 GET EMAIL
 
         conn = sqlite3.connect(db_path)
