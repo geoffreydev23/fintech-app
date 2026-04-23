@@ -35,17 +35,22 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 # 📧 SEND EMAIL FUNCTION (NEW)
 def send_email(to_email, subject, message):
-    msg = MIMEText(message)
-    msg['Subject'] = subject
-    msg['From'] = EMAIL_ADDRESS
-    msg['To'] = to_email
+    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+        print("❌ Missing email credentials")
+        return
 
     try:
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
+        msg = MIMEText(message)
+        msg['Subject'] = subject
+        msg['From'] = EMAIL_ADDRESS
+        msg['To'] = to_email
+
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(msg)
+
         print("✅ Email sent successfully")
+
     except Exception as e:
         print("❌ Email error:", e)
 
@@ -224,8 +229,17 @@ def init_db():
         )
     ''')
 
-    conn.commit()  # ✅ IMPORTANT (ensures changes are saved)
+    conn.commit()  # ✅ IMPORTANT
     conn.close()
+
+
+# 🔥 THIS RUNS ON STARTUP (LOCAL + RENDER)
+init_db()
+
+
+# ▶️ RUN (LOCAL ONLY)
+if __name__ == "__main__":
+    app.run(debug=True)
 
 # 📝 REGISTER
 @app.route('/register', methods=['GET', 'POST'])
@@ -340,7 +354,7 @@ This will expire in 10 minutes.
 
             send_email(email, "Password Reset - Fintech App", message)
 
-            return "Reset link and OTP sent to your email."
+            return render_template("reset_request.html", message="Reset link and OTP sent to your email.")
 
         conn.close()
         return "Email not found"
