@@ -5,7 +5,7 @@ import secrets
 import random
 import smtplib
 from email.mime.text import MIMEText
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # 🆕 LOAD ENV VARIABLES (PERMANENT FIX)
@@ -328,7 +328,7 @@ def request_reset():
         if user:
             token = secrets.token_urlsafe(32)
             otp = str(random.randint(100000, 999999))
-            expiry = datetime.utcnow() + timedelta(minutes=10)
+            expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
 
             conn.execute(
                 "UPDATE users SET reset_token=?, token_expiry=?, otp=?, otp_expiry=? WHERE email=?",
@@ -374,7 +374,7 @@ def reset_with_token(token):
     expiry = datetime.fromisoformat(user[4])
     otp_expiry = datetime.fromisoformat(user[6])
 
-    if datetime.utcnow() > expiry or datetime.utcnow() > otp_expiry:
+    if datetime.now(timezone.utc) > expiry or datetime.now(timezone.utc) > otp_expiry:
         conn.close()
         return "Expired"
 
@@ -490,4 +490,4 @@ def index():
 # ▶️ RUN
 if __name__ == "__main__":
     init_db()
-    app.run(debug=True)
+    app.run(debug=False)
