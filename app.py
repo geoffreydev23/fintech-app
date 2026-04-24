@@ -265,25 +265,46 @@ def register():
         hashed = generate_password_hash(password)
 
         try:
-            conn = sqlite3.connect(db_path)
+            conn = get_db_connection()
+            cur = conn.cursor()
 
             # 🔍 CHECK IF USERNAME OR EMAIL ALREADY EXISTS
-            existing_user = conn.execute(
-                "SELECT * FROM users WHERE username=? OR email=?",
-                (username, email)
-            ).fetchone()
+            if DATABASE_URL:
+                # PostgreSQL
+                cur.execute(
+                    "SELECT * FROM users WHERE username=%s OR email=%s",
+                    (username, email)
+                )
+            else:
+                # SQLite
+                cur.execute(
+                    "SELECT * FROM users WHERE username=? OR email=?",
+                    (username, email)
+                )
+
+            existing_user = cur.fetchone()
 
             if existing_user:
+                cur.close()
                 conn.close()
                 return render_template("register.html", error="Username or email already exists")
 
             # ✅ INSERT NEW USER
-            conn.execute(
-                "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
-                (username, email, hashed)
-            )
+            if DATABASE_URL:
+                # PostgreSQL
+                cur.execute(
+                    "INSERT INTO users (username, email, password) VALUES (%s, %s, %s)",
+                    (username, email, hashed)
+                )
+            else:
+                # SQLite
+                cur.execute(
+                    "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
+                    (username, email, hashed)
+                )
 
             conn.commit()
+            cur.close()
             conn.close()
 
             return redirect('/login')
