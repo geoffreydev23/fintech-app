@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, session, url_for, abort
 import sqlite3
+import psycopg2   # 🆕 ADD THIS
 import os
 import secrets
 import random
@@ -7,6 +8,15 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# 🆕 DATABASE CONFIG (ADD THIS SECTION)
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+def get_db_connection():
+    if DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL)  # Render → PostgreSQL
+    else:
+        return sqlite3.connect(os.path.join(os.path.dirname(__file__), 'database.db'))  # Local → SQLite
 
 # 🆕 LOAD ENV VARIABLES (PERMANENT FIX)
 from dotenv import load_dotenv
