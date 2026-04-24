@@ -2,3 +2,4 @@ Flask
 gunicorn
 python-dotenv
 werkzeug
+psycopg2-binary
