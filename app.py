@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, redirect, session, url_for, abort
 import sqlite3
-import psycopg2   # 🆕 ADD THIS
 import os
 import secrets
 import random
@@ -8,6 +7,10 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
+
+# 🐘 PostgreSQL
+import psycopg2
+from urllib.parse import urlparse
 
 # 🆕 DATABASE CONFIG (ADD THIS SECTION)
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -192,64 +195,98 @@ def generate_savings_goal(income, expenses):
 
 # 🗄️ INIT DB
 def init_db():
-    conn = sqlite3.connect(db_path)
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-    # 👤 USERS TABLE
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            reset_token TEXT,
-            token_expiry TEXT,
-            otp TEXT,
-            otp_expiry TEXT
-        )
-    ''')
+    if DATABASE_URL:
+        # 🐘 PostgreSQL version
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE,
+                email TEXT UNIQUE,
+                password TEXT,
+                reset_token TEXT,
+                token_expiry TEXT,
+                otp TEXT,
+                otp_expiry TEXT
+            )
+        ''')
 
-    # ✅ ADD EMAIL COLUMN SAFELY (WILL NOT BREAK EXISTING DB)
-    try:
-        conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
-    except:
-        pass
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                amount REAL,
+                type TEXT,
+                category TEXT,
+                source TEXT,
+                description TEXT
+            )
+        ''')
 
-    # 💰 TRANSACTIONS TABLE
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            amount REAL,
-            type TEXT,
-            category TEXT,
-            source TEXT,
-            description TEXT
-        )
-    ''')
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS archived_transactions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                amount REAL,
+                type TEXT,
+                category TEXT,
+                source TEXT,
+                description TEXT
+            )
+        ''')
 
-    # 📂 ARCHIVED TRANSACTIONS
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS archived_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            amount REAL,
-            type TEXT,
-            category TEXT,
-            source TEXT,
-            description TEXT
-        )
-    ''')
+    else:
+        # 🪶 SQLite version
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                password TEXT,
+                reset_token TEXT,
+                token_expiry TEXT,
+                otp TEXT,
+                otp_expiry TEXT
+            )
+        ''')
 
-    conn.commit()  # ✅ IMPORTANT
+        # ✅ ADD EMAIL COLUMN SAFELY
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        except:
+            pass
+
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                amount REAL,
+                type TEXT,
+                category TEXT,
+                source TEXT,
+                description TEXT
+            )
+        ''')
+
+        cur.execute('''
+            CREATE TABLE IF NOT EXISTS archived_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                amount REAL,
+                type TEXT,
+                category TEXT,
+                source TEXT,
+                description TEXT
+            )
+        ''')
+
+    conn.commit()
+    cur.close()
     conn.close()
 
-
-# 🔥 THIS RUNS ON STARTUP (LOCAL + RENDER)
+# 🔥 RUN IT ON STARTUP (CRITICAL FOR :contentReference[oaicite:0]{index=0})
 init_db()
-
-
-# ▶️ RUN (LOCAL ONLY)
-if __name__ == "__main__":
-    app.run(debug=True)
 
 # 📝 REGISTER
 @app.route('/register', methods=['GET', 'POST'])
@@ -518,7 +555,10 @@ def index():
         savings_goal=savings_goal
     )
 
-# ▶️ RUN
+# 🔥 RUN DB INIT ON STARTUP (ALWAYS RUNS)
+init_db()
+
+
+# ▶️ RUN (LOCAL ONLY)
 if __name__ == "__main__":
-    init_db()
     app.run(debug=False)
