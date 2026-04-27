@@ -430,11 +430,21 @@ def request_reset():
             otp = str(random.randint(100000, 999999))
             expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
 
-            conn.execute(
-                "UPDATE users SET reset_token=?, token_expiry=?, otp=?, otp_expiry=? WHERE email=?",
-                (token, expiry.isoformat(), otp, expiry.isoformat(), email)
-            )
+            cur = conn.cursor()
+
+            if DATABASE_URL:
+                cur.execute(
+                    "UPDATE users SET reset_token=%s, token_expiry=%s, otp=%s, otp_expiry=%s WHERE email=%s",
+                    (token, expiry.isoformat(), otp, expiry.isoformat(), email)
+                )
+            else:
+                cur.execute(
+                    "UPDATE users SET reset_token=?, token_expiry=?, otp=?, otp_expiry=? WHERE email=?",
+                    (token, expiry.isoformat(), otp, expiry.isoformat(), email)
+                )
+
             conn.commit()
+            cur.close()
             conn.close()
 
             link = url_for('reset_with_token', token=token, _external=True)
@@ -466,7 +476,13 @@ This will expire in 10 minutes.
 def reset_with_token(token):
     conn = get_db_connection()
     cur = conn.cursor()
-    user = conn.execute("SELECT * FROM users WHERE reset_token=?", (token,)).fetchone()
+
+    if DATABASE_URL:
+        cur.execute("SELECT * FROM users WHERE reset_token=%s", (token,))
+    else:
+        cur.execute("SELECT * FROM users WHERE reset_token=?", (token,))
+
+    user = cur.fetchone()
 
     if not user:
         conn.close()
@@ -494,11 +510,21 @@ def reset_with_token(token):
 
         hashed = generate_password_hash(password)
 
-        conn.execute(
-            "UPDATE users SET password=?, reset_token=NULL, otp=NULL, token_expiry=NULL, otp_expiry=NULL WHERE id=?",
-            (hashed, user[0])
-        )
+        cur = conn.cursor()
+
+        if DATABASE_URL:
+            cur.execute(
+                "UPDATE users SET password=%s, reset_token=NULL, otp=NULL, token_expiry=NULL, otp_expiry=NULL WHERE id=%s",
+                (hashed, user[0])
+            )
+        else:
+            cur.execute(
+                "UPDATE users SET password=?, reset_token=NULL, otp=NULL, token_expiry=NULL, otp_expiry=NULL WHERE id=?",
+                (hashed, user[0])
+            )
+
         conn.commit()
+        cur.close()
         conn.close()
 
         return redirect('/login')
@@ -515,20 +541,46 @@ def restore(id):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    t = conn.execute(
-        "SELECT * FROM archived_transactions WHERE id=? AND user_id=?",
-        (id, session['user_id'])
-    ).fetchone()
+    # 🔍 GET ARCHIVED TRANSACTION
+    if DATABASE_URL:
+        cur.execute(
+            "SELECT * FROM archived_transactions WHERE id=%s AND user_id=%s",
+            (id, session['user_id'])
+        )
+    else:
+        cur.execute(
+            "SELECT * FROM archived_transactions WHERE id=? AND user_id=?",
+            (id, session['user_id'])
+        )
+
+    t = cur.fetchone()
 
     if t:
-        conn.execute(
-            "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
-            (t[1], t[2], t[3], t[4], t[5], t[6])
-        )
-        conn.execute("DELETE FROM archived_transactions WHERE id=?", (id,))
+        # ➕ RESTORE TO MAIN TABLE
+        if DATABASE_URL:
+            cur.execute(
+                "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (%s, %s, %s, %s, %s, %s)",
+                (t[1], t[2], t[3], t[4], t[5], t[6])
+            )
+            cur.execute(
+                "DELETE FROM archived_transactions WHERE id=%s",
+                (id,)
+            )
+        else:
+            cur.execute(
+                "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
+                (t[1], t[2], t[3], t[4], t[5], t[6])
+            )
+            cur.execute(
+                "DELETE FROM archived_transactions WHERE id=?",
+                (id,)
+            )
+
         conn.commit()
 
+    cur.close()
     conn.close()
+
     return redirect('/archive')
 
 # 🚪 LOGOUT
@@ -553,15 +605,38 @@ def index():
         desc = request.form['description']
         category = request.form['category'] or auto_category(desc)
 
-        conn.execute(
-            "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
-            (session['user_id'], amount, t_type, category, source, desc)
-        )
+        # ➕ INSERT TRANSACTION
+        if DATABASE_URL:
+            cur.execute(
+                "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (%s, %s, %s, %s, %s, %s)",
+                (session['user_id'], amount, t_type, category, source, desc)
+            )
+        else:
+            cur.execute(
+                "INSERT INTO transactions (user_id, amount, type, category, source, description) VALUES (?, ?, ?, ?, ?, ?)",
+                (session['user_id'], amount, t_type, category, source, desc)
+            )
+
         conn.commit()
 
-    transactions = conn.execute("SELECT * FROM transactions WHERE user_id=?", (session['user_id'],)).fetchall()
+    # 📊 FETCH TRANSACTIONS
+    if DATABASE_URL:
+        cur.execute(
+            "SELECT * FROM transactions WHERE user_id=%s",
+            (session['user_id'],)
+        )
+    else:
+        cur.execute(
+            "SELECT * FROM transactions WHERE user_id=?",
+            (session['user_id'],)
+        )
+
+    transactions = cur.fetchall()
+
+    cur.close()
     conn.close()
 
+    # 💰 CALCULATIONS (UNCHANGED)
     income = sum(t[2] for t in transactions if t[3] == "income")
     expenses = sum(t[2] for t in transactions if t[3] == "expense")
     balance = income - expenses
