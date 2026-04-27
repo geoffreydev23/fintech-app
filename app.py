@@ -495,7 +495,7 @@ def reset_with_token(token):
         conn.close()
         return "Invalid token"
 
-    expiry = datetime.fromisoformat(user[4])
+    expiry = datetime.fromisoformat(user[5])
     otp_expiry = datetime.fromisoformat(user[6])
 
     if datetime.now(timezone.utc) > expiry or datetime.now(timezone.utc) > otp_expiry:
