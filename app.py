@@ -17,10 +17,22 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db_connection():
     if DATABASE_URL:
-        return psycopg2.connect(DATABASE_URL)  # Render → PostgreSQL
+        # 🐘 PostgreSQL
+        url = urlparse(DATABASE_URL)
+        conn = psycopg2.connect(
+            host=url.hostname,
+            database=url.path[1:],
+            user=url.username,
+            password=url.password,
+            port=url.port
+        )
+        return conn
     else:
-        return sqlite3.connect(os.path.join(os.path.dirname(__file__), 'database.db'))  # Local → SQLite
-
+        # 🪶 SQLite (local)
+        return sqlite3.connect(
+            os.path.join(os.path.dirname(__file__), 'database.db')
+        )
+    
 # 🆕 LOAD ENV VARIABLES (PERMANENT FIX)
 from dotenv import load_dotenv
 load_dotenv()
@@ -315,7 +327,7 @@ def register():
             else:
                 # SQLite
                 cur.execute(
-                    "SELECT * FROM users WHERE username=? OR email=?",
+                    "SELECT * FROM users WHERE username=%s OR email=?",
                     (username, email)
                 )
 
@@ -366,10 +378,19 @@ def login():
         username = request.form['username']
         password = request.form['password']
 
-        conn = sqlite3.connect(db_path)
-        user = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
-        conn.close()
+        conn = get_db_connection()
+        cur = conn.cursor()
 
+        if DATABASE_URL:
+            cur.execute("SELECT * FROM users WHERE username=%s", (username,))
+        else:
+            cur.execute("SELECT * FROM users WHERE username=%s", (username,))
+
+        user = cur.fetchone()
+
+        cur.close()
+        conn.close()
+        
         if user and check_password_hash(user[2], password):
             session.clear()
             session['user_id'] = user[0]
@@ -390,8 +411,19 @@ def request_reset():
         
         email = request.form['email']  # 🆕 GET EMAIL
 
-        conn = sqlite3.connect(db_path)
-        user = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        if DATABASE_URL:
+            cur.execute("SELECT * FROM users WHERE email=%s", (email,))
+        else:
+            cur.execute("SELECT * FROM users WHERE email=?", (email,))
+
+        user = cur.fetchone()
+
+        cur.close()
+        conn.close()
+        
 
         if user:
             token = secrets.token_urlsafe(32)
@@ -432,7 +464,8 @@ This will expire in 10 minutes.
 # 🔒 RESET WITH TOKEN + OTP (UNCHANGED - ALREADY SECURE)
 @app.route('/reset/<token>', methods=['GET', 'POST'])
 def reset_with_token(token):
-    conn = sqlite3.connect(db_path)
+    conn = get_db_connection()
+    cur = conn.cursor()
     user = conn.execute("SELECT * FROM users WHERE reset_token=?", (token,)).fetchone()
 
     if not user:
@@ -479,7 +512,8 @@ def restore(id):
     if 'user_id' not in session:
         return redirect('/login')
 
-    conn = sqlite3.connect(db_path)
+    conn = get_db_connection()
+    cur = conn.cursor()
 
     t = conn.execute(
         "SELECT * FROM archived_transactions WHERE id=? AND user_id=?",
@@ -509,7 +543,8 @@ def index():
     if 'user_id' not in session:
         return redirect('/login')
 
-    conn = sqlite3.connect(db_path)
+    conn = get_db_connection()
+    cur = conn.cursor()
 
     if request.method == 'POST':
         amount = float(request.form['amount'])
