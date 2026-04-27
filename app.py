@@ -414,6 +414,7 @@ def request_reset():
         conn = get_db_connection()
         cur = conn.cursor()
 
+        # 🔍 CHECK USER
         if DATABASE_URL:
             cur.execute("SELECT * FROM users WHERE email=%s", (email,))
         else:
@@ -421,17 +422,12 @@ def request_reset():
 
         user = cur.fetchone()
 
-        cur.close()
-        conn.close()
-        
-
         if user:
             token = secrets.token_urlsafe(32)
             otp = str(random.randint(100000, 999999))
             expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
 
-            cur = conn.cursor()
-
+            # 🔄 UPDATE USER (same connection, DO NOT close before this)
             if DATABASE_URL:
                 cur.execute(
                     "UPDATE users SET reset_token=%s, token_expiry=%s, otp=%s, otp_expiry=%s WHERE email=%s",
@@ -444,12 +440,10 @@ def request_reset():
                 )
 
             conn.commit()
-            cur.close()
-            conn.close()
 
             link = url_for('reset_with_token', token=token, _external=True)
 
-            # 📧 SEND EMAIL TO REAL EMAIL
+            # 📧 SEND EMAIL
             message = f"""
 Password Reset Request
 
@@ -464,10 +458,23 @@ This will expire in 10 minutes.
 
             send_email(email, "Password Reset - Fintech App", message)
 
-            return render_template("reset_request.html", message="Reset link and OTP sent to your email.")
+            # ✅ CLOSE ONLY ONCE (AFTER EVERYTHING)
+            cur.close()
+            conn.close()
 
+            return render_template(
+                "reset_request.html",
+                message="Reset link and OTP sent to your email."
+            )
+
+        # ❌ USER NOT FOUND
+        cur.close()
         conn.close()
-        return "Email not found"
+
+        return render_template(
+            "reset_request.html",
+            error="Email not found"
+        )
 
     return render_template("reset_request.html")
 
