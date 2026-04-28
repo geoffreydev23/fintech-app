@@ -478,12 +478,13 @@ This will expire in 10 minutes.
 
     return render_template("reset_request.html")
 
-# 🔒 RESET WITH TOKEN + OTP (UNCHANGED - ALREADY SECURE)
+# 🔒 RESET WITH TOKEN + OTP (FULLY FIXED & SAFE)
 @app.route('/reset/<token>', methods=['GET', 'POST'])
 def reset_with_token(token):
     conn = get_db_connection()
     cur = conn.cursor()
 
+    # 🔍 Find user by token
     if DATABASE_URL:
         cur.execute("SELECT * FROM users WHERE reset_token=%s", (token,))
     else:
@@ -492,33 +493,59 @@ def reset_with_token(token):
     user = cur.fetchone()
 
     if not user:
+        cur.close()
         conn.close()
         return "Invalid token"
 
-    expiry = datetime.fromisoformat(user[5])
-    otp_expiry = datetime.fromisoformat(user[6])
-
-    if datetime.now(timezone.utc) > expiry or datetime.now(timezone.utc) > otp_expiry:
+    # 🧠 SAFE expiry parsing (prevents crashes)
+    try:
+        expiry = datetime.fromisoformat(user[5]) if user[5] else None
+        otp_expiry = datetime.fromisoformat(user[7]) if user[7] else None
+    except Exception as e:
+        print("Expiry parse error:", e)
+        cur.close()
         conn.close()
-        return "Expired"
+        return "Invalid or corrupted reset data"
 
+    # 🚫 Validate presence
+    if not expiry or not otp_expiry:
+        cur.close()
+        conn.close()
+        return "Invalid reset data"
+
+    # ⏰ Check expiration
+    now = datetime.now(timezone.utc)
+
+    if now > expiry:
+        cur.close()
+        conn.close()
+        return "Reset link expired"
+
+    if now > otp_expiry:
+        cur.close()
+        conn.close()
+        return "OTP expired"
+
+    # 🔁 HANDLE FORM SUBMISSION
     if request.method == 'POST':
         otp_input = request.form.get('otp', '').strip()
 
-        if not otp_input or otp_input != user[5]:
+        # ✅ FIXED: correct OTP index
+        if not otp_input or otp_input != str(user[6]):
+            cur.close()
             conn.close()
             return "Wrong OTP"
 
         password = request.form['password']
 
         if not is_strong_password(password):
+            cur.close()
             conn.close()
             return "Weak password"
 
         hashed = generate_password_hash(password)
 
-        cur = conn.cursor()
-
+        # 🔄 Update password + clear reset fields
         if DATABASE_URL:
             cur.execute(
                 "UPDATE users SET password=%s, reset_token=NULL, otp=NULL, token_expiry=NULL, otp_expiry=NULL WHERE id=%s",
@@ -536,6 +563,8 @@ def reset_with_token(token):
 
         return redirect('/login')
 
+    # 📄 Show reset page
+    cur.close()
     conn.close()
     return render_template("reset.html")
 
