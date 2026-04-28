@@ -381,17 +381,19 @@ def login():
         conn = get_db_connection()
         cur = conn.cursor()
 
+        # ✅ Correct query for both DBs
         if DATABASE_URL:
             cur.execute("SELECT * FROM users WHERE username=%s", (username,))
         else:
-            cur.execute("SELECT * FROM users WHERE username=%s", (username,))
+            cur.execute("SELECT * FROM users WHERE username=?", (username,))
 
         user = cur.fetchone()
 
         cur.close()
         conn.close()
-        
-        if user and check_password_hash(user[2], password):
+
+        # ✅ FIXED: correct password index
+        if user and check_password_hash(user[3], password):
             session.clear()
             session['user_id'] = user[0]
             session.permanent = True
