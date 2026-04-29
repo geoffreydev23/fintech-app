@@ -305,7 +305,7 @@ init_db()
 def register():
     if request.method == 'POST':
         username = request.form['username']
-        email = request.form['email']  # 🆕 GET EMAIL
+        email = request.form['email']
         password = request.form['password']
 
         if not is_strong_password(password):
@@ -319,15 +319,15 @@ def register():
 
             # 🔍 CHECK IF USERNAME OR EMAIL ALREADY EXISTS
             if DATABASE_URL:
-                # PostgreSQL
+                # PostgreSQL ✅
                 cur.execute(
                     "SELECT * FROM users WHERE username=%s OR email=%s",
                     (username, email)
                 )
             else:
-                # SQLite
+                # SQLite ✅ FIXED
                 cur.execute(
-                    "SELECT * FROM users WHERE username=%s OR email=?",
+                    "SELECT * FROM users WHERE username=? OR email=?",
                     (username, email)
                 )
 
@@ -381,10 +381,11 @@ def login():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # ✅ Correct query for both DBs
         if DATABASE_URL:
+            # PostgreSQL ✅
             cur.execute("SELECT * FROM users WHERE username=%s", (username,))
         else:
+            # SQLite ✅ FIXED
             cur.execute("SELECT * FROM users WHERE username=?", (username,))
 
         user = cur.fetchone()
@@ -392,7 +393,6 @@ def login():
         cur.close()
         conn.close()
 
-        # ✅ FIXED: correct password index
         if user and check_password_hash(user[3], password):
             session.clear()
             session['user_id'] = user[0]
