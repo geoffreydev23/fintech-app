@@ -58,11 +58,11 @@ app.config.update(
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-# 📧 SEND EMAIL FUNCTION (NEW)
+# 📧 SEND EMAIL FUNCTION (SAFE + NON-BLOCKING)
 def send_email(to_email, subject, message):
     if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
         print("❌ Missing email credentials")
-        return
+        return False
 
     try:
         msg = MIMEText(message)
@@ -70,14 +70,17 @@ def send_email(to_email, subject, message):
         msg['From'] = EMAIL_ADDRESS
         msg['To'] = to_email
 
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        # ⏱️ Add timeout (VERY IMPORTANT)
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
             server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
             server.send_message(msg)
 
         print("✅ Email sent successfully")
+        return True
 
     except Exception as e:
         print("❌ Email error:", e)
+        return False  # 🚨 DON'T CRASH APP
 
 # 🔐 SAFE API KEY
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -458,24 +461,19 @@ Your OTP Code:
 This will expire in 10 minutes.
 """
 
-            send_email(email, "Password Reset - Fintech App", message)
+            email_sent = send_email(email, "Password Reset - Fintech App", message)
 
-            # ✅ CLOSE ONLY ONCE (AFTER EVERYTHING)
-            cur.close()
-            conn.close()
+            if not email_sent:
+                print("⚠️ Email failed, but continuing...")
 
-            return render_template(
-                "reset_request.html",
-                message="Reset link and OTP sent to your email."
-            )
-
-        # ❌ USER NOT FOUND
+        # ✅ CLOSE CONNECTION (only once, outside condition)
         cur.close()
         conn.close()
 
+        # 🔒 ALWAYS SAME RESPONSE (SECURITY BEST PRACTICE)
         return render_template(
             "reset_request.html",
-            error="Email not found"
+            message="If the email exists, a reset link has been sent."
         )
 
     return render_template("reset_request.html")
