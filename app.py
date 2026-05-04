@@ -55,32 +55,53 @@ app.config.update(
 )
 
 # 🔐 EMAIL CONFIG (NEW)
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+FROM_EMAIL = os.getenv("FROM_EMAIL") 
 
-# 📧 SEND EMAIL FUNCTION (SAFE + NON-BLOCKING)
+import requests
+
+# 📧 SEND EMAIL FUNCTION (SENDGRID API - SAFE)
 def send_email(to_email, subject, message):
-    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
-        print("❌ Missing email credentials")
+    if not SENDGRID_API_KEY or not FROM_EMAIL:
+        print("❌ Missing SendGrid configuration")
         return False
 
     try:
-        msg = MIMEText(message)
-        msg['Subject'] = subject
-        msg['From'] = EMAIL_ADDRESS
-        msg['To'] = to_email
+        url = "https://api.sendgrid.com/v3/mail/send"
 
-        # ⏱️ Add timeout (VERY IMPORTANT)
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=10) as server:
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.send_message(msg)
+        headers = {
+            "Authorization": f"Bearer {SENDGRID_API_KEY}",
+            "Content-Type": "application/json"
+        }
 
-        print("✅ Email sent successfully")
-        return True
+        data = {
+            "personalizations": [
+                {
+                    "to": [{"email": to_email}],
+                    "subject": subject
+                }
+            ],
+            "from": {"email": FROM_EMAIL},
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": message
+                }
+            ]
+        }
+
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+
+        if response.status_code in [200, 202]:
+            print("✅ Email sent successfully")
+            return True
+        else:
+            print("❌ SendGrid error:", response.text)
+            return False
 
     except Exception as e:
-        print("❌ Email error:", e)
-        return False  # 🚨 DON'T CRASH APP
+        print("❌ Email exception:", e)
+        return False  # 🚨 NEVER crash your app
 
 # 🔐 SAFE API KEY
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
