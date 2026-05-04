@@ -54,16 +54,21 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(minutes=15)
 )
 
-# 🔐 EMAIL CONFIG (NEW)
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-FROM_EMAIL = os.getenv("FROM_EMAIL") 
-
+# 🔐 EMAIL CONFIG (SENDGRID)
+import os
 import requests
 
-# 📧 SEND EMAIL FUNCTION (SENDGRID API - SAFE)
+SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
+FROM_EMAIL = os.getenv("FROM_EMAIL")  # must match verified sender
+
+# 📧 SEND EMAIL FUNCTION (SENDGRID API - SAFE + IMPROVED)
 def send_email(to_email, subject, message):
-    if not SENDGRID_API_KEY or not FROM_EMAIL:
-        print("❌ Missing SendGrid configuration")
+    if not SENDGRID_API_KEY:
+        print("❌ Missing SENDGRID_API_KEY")
+        return False
+
+    if not FROM_EMAIL:
+        print("❌ Missing FROM_EMAIL")
         return False
 
     try:
@@ -81,7 +86,10 @@ def send_email(to_email, subject, message):
                     "subject": subject
                 }
             ],
-            "from": {"email": FROM_EMAIL},
+            "from": {
+                "email": FROM_EMAIL,
+                "name": "Fintech App"  # ✅ optional branding (safe)
+            },
             "content": [
                 {
                     "type": "text/plain",
@@ -90,17 +98,26 @@ def send_email(to_email, subject, message):
             ]
         }
 
+        # ⏱️ Timeout prevents server hanging
         response = requests.post(url, headers=headers, json=data, timeout=10)
 
+        # ✅ SUCCESS
         if response.status_code in [200, 202]:
             print("✅ Email sent successfully")
             return True
-        else:
-            print("❌ SendGrid error:", response.text)
-            return False
+
+        # ❌ FAILURE (detailed log)
+        print("❌ SendGrid error:")
+        print("Status Code:", response.status_code)
+        print("Response Body:", response.text)
+        return False
+
+    except requests.exceptions.Timeout:
+        print("❌ SendGrid timeout (network issue)")
+        return False
 
     except Exception as e:
-        print("❌ Email exception:", e)
+        print("❌ Email exception:", str(e))
         return False  # 🚨 NEVER crash your app
 
 # 🔐 SAFE API KEY
