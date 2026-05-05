@@ -1,72 +1,136 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Reset Password</title>
+{% extends "base.html" %}
 
-    <style>
-        body {
-            font-family: Arial;
-            background: #0f172a;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
+{% block content %}
 
-        .box {
-            background: #1e293b;
-            padding: 25px;
-            border-radius: 10px;
-            width: 300px;
-        }
+<div class="auth-container">
+    <div class="auth-box">
+        <h2>🔑 Reset Password</h2>
+        <p class="subtitle">Enter your OTP and new password</p>
 
-        input {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0;
-            border-radius: 5px;
-            border: none;
-        }
+        <!-- 🔴 ERROR MESSAGE -->
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
 
-        button {
-            width: 100%;
-            padding: 10px;
-            background: orange;
-            border: none;
-            color: white;
-            font-weight: bold;
-            border-radius: 5px;
-        }
+        <form method="POST">
+            <!-- 🔐 CSRF TOKEN -->
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
-        p {
-            text-align: center;
-        }
-    </style>
-</head>
-<body>
+            <!-- 🔢 OTP -->
+            <input 
+                name="otp" 
+                placeholder="Enter 6-digit OTP" 
+                maxlength="6" 
+                required
+            >
 
-<div class="box">
-    <h2>🔑 Reset Password</h2>
+            <!-- 🔒 NEW PASSWORD -->
+            <input 
+                name="password" 
+                type="password" 
+                placeholder="Enter new password" 
+                required
+            >
 
-    {% if error %}
-        <p style="color:red;">{{error}}</p>
-    {% endif %}
+            <button type="submit">Reset Password</button>
+        </form>
 
-    <form method="POST">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-
-        <!-- ✅ OTP ONLY -->
-        <input name="otp" placeholder="6-digit OTP" maxlength="6" required>
-
-        <!-- ✅ NEW PASSWORD -->
-        <input name="password" type="password" placeholder="New Password" required>
-
-        <button type="submit">Reset Password</button>
-    </form>
-
-    <p><a href="/login">Back to Login</a></p>
+        <p class="switch">
+            Remembered your password?
+            <a href="/login">Back to Login</a>
+        </p>
+    </div>
 </div>
 
-</body>
-</html>
+<style>
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80vh;
+}
+
+.auth-box {
+    background: #1e293b;
+    padding: 30px;
+    border-radius: 12px;
+    width: 340px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    animation: fadeIn 0.5s ease;
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 15px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: white;
+    transition: 0.3s;
+}
+
+input:focus {
+    outline: none;
+    border-color: #f59e0b; /* orange glow for reset */
+    box-shadow: 0 0 5px #f59e0b;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    border: none;
+    color: white;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 10px #f59e0b;
+}
+
+a {
+    color: #38bdf8;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.switch {
+    text-align: center;
+    margin-top: 15px;
+}
+
+.error {
+    background: #ef4444;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+{% endblock %}

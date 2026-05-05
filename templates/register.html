@@ -1,113 +1,156 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Register</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% extends "base.html" %}
 
-    <style>
-        body {
-            font-family: Arial;
-            background: #0f172a;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
+{% block content %}
 
-        .box {
-            background: #1e293b;
-            padding: 25px;
-            border-radius: 10px;
-            width: 300px;
-        }
+<div class="auth-container">
+    <div class="auth-box">
+        <h2>📝 Create Account</h2>
+        <p class="subtitle">Join your fintech dashboard</p>
 
-        h2 {
-            text-align: center;
-        }
+        <!-- 🔴 ERROR MESSAGE -->
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
 
-        input {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0;
-            border-radius: 5px;
-            border: none;
-        }
+        <!-- 🟢 SUCCESS MESSAGE -->
+        {% if success %}
+            <div class="success">{{ success }}</div>
+        {% endif %}
 
-        button {
-            width: 100%;
-            padding: 10px;
-            background: #22c55e;
-            border: none;
-            color: white;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-        }
+        <form method="POST">
+            <!-- 🔐 CSRF TOKEN -->
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
-        button:hover {
-            background: #16a34a;
-        }
+            <!-- 📧 EMAIL -->
+            <input 
+                name="email" 
+                type="email" 
+                placeholder="Enter your email" 
+                required
+            >
 
-        a {
-            color: lightblue;
-            text-decoration: none;
-        }
+            <!-- 👤 USERNAME -->
+            <input 
+                name="username" 
+                placeholder="Choose a username" 
+                required
+            >
 
-        p {
-            text-align: center;
-        }
+            <!-- 🔒 PASSWORD -->
+            <input 
+                name="password" 
+                type="password" 
+                placeholder="Create a strong password" 
+                required
+            >
 
-        .error {
-            background: #ef4444;
-            padding: 8px;
-            border-radius: 5px;
-            text-align: center;
-            margin-bottom: 10px;
-        }
+            <button type="submit">Create Account</button>
+        </form>
 
-        .success {
-            background: #22c55e;
-            padding: 8px;
-            border-radius: 5px;
-            text-align: center;
-            margin-bottom: 10px;
-        }
-    </style>
-</head>
-<body>
-
-<div class="box">
-    <h2>📝 Register</h2>
-
-    <!-- 🔴 ERROR MESSAGE -->
-    {% if error %}
-        <div class="error">{{ error }}</div>
-    {% endif %}
-
-    <!-- 🟢 SUCCESS MESSAGE (optional) -->
-    {% if success %}
-        <div class="success">{{ success }}</div>
-    {% endif %}
-
-    <form method="POST">
-        <!-- 🔐 CSRF TOKEN -->
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-
-        <!-- 🆕 EMAIL FIELD -->
-        <input name="email" type="email" placeholder="Email Address" required>
-
-        <input name="username" placeholder="Username" required>
-        <input name="password" type="password" placeholder="Password" required>
-
-        <button type="submit">Create Account</button>
-    </form>
-
-    <p>
-        Already have an account?
-        <a href="/login">Login</a>
-    </p>
+        <p class="switch">
+            Already have an account?
+            <a href="/login">Login</a>
+        </p>
+    </div>
 </div>
 
-</body>
-</html>
+<style>
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80vh;
+}
+
+.auth-box {
+    background: #1e293b;
+    padding: 30px;
+    border-radius: 12px;
+    width: 340px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    animation: fadeIn 0.5s ease;
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 15px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: white;
+    transition: 0.3s;
+}
+
+input:focus {
+    outline: none;
+    border-color: #22c55e;
+    box-shadow: 0 0 5px #22c55e;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: none;
+    color: white;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 10px #22c55e;
+}
+
+a {
+    color: #38bdf8;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.switch {
+    text-align: center;
+    margin-top: 15px;
+}
+
+.error {
+    background: #ef4444;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.success {
+    background: #22c55e;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+{% endblock %}

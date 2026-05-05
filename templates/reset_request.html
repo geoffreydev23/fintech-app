@@ -1,14 +1,141 @@
-<div class="box">
-    <h2>🔑 Forgot Password</h2>
+{% extends "base.html" %}
 
-    {% if error %}<p style="color:red;">{{error}}</p>{% endif %}
-    {% if message %}<p style="color:lightgreen;">{{message}}</p>{% endif %}
+{% block content %}
 
-    <form method="POST">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+<div class="auth-container">
+    <div class="auth-box">
+        <h2>🔑 Forgot Password</h2>
+        <p class="subtitle">Enter your email to receive a reset link</p>
 
-        <input name="email" type="email" placeholder="Enter your email" required>
+        <!-- 🔴 ERROR MESSAGE -->
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
 
-        <button type="submit">Send Reset Link</button>
-    </form>
+        <!-- 🟢 SUCCESS MESSAGE -->
+        {% if message %}
+            <div class="success">{{ message }}</div>
+        {% endif %}
+
+        <form method="POST">
+            <!-- 🔐 CSRF TOKEN -->
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+            <!-- 📧 EMAIL -->
+            <input 
+                name="email" 
+                type="email" 
+                placeholder="Enter your email address" 
+                required
+            >
+
+            <button type="submit">Send Reset Link</button>
+        </form>
+
+        <p class="switch">
+            Remember your password?
+            <a href="/login">Back to Login</a>
+        </p>
+    </div>
 </div>
+
+<style>
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 80vh;
+}
+
+.auth-box {
+    background: #1e293b;
+    padding: 30px;
+    border-radius: 12px;
+    width: 340px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    animation: fadeIn 0.5s ease;
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 15px;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: white;
+    transition: 0.3s;
+}
+
+input:focus {
+    outline: none;
+    border-color: #22c55e;
+    box-shadow: 0 0 5px #22c55e;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: none;
+    color: white;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    transform: scale(1.03);
+    box-shadow: 0 0 10px #22c55e;
+}
+
+a {
+    color: #38bdf8;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.switch {
+    text-align: center;
+    margin-top: 15px;
+}
+
+.error {
+    background: #ef4444;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.success {
+    background: #22c55e;
+    padding: 10px;
+    border-radius: 6px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+{% endblock %}
