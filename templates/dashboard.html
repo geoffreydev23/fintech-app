@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial;
+            background: #0f172a;
+            color: white;
+        }
+
+        /* 🔝 NAVBAR */
+        .navbar {
+            background: #020617;
+            padding: 15px 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        .logo {
+            font-weight: bold;
+            color: #22c55e;
+        }
+
+        .logout {
+            color: #ef4444;
+            text-decoration: none;
+        }
+
+        /* 📦 MAIN */
+        .container {
+            padding: 25px;
+        }
+
+        .welcome {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* 💳 CARD */
+        .card {
+            background: #1e293b;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .balance {
+            font-size: 28px;
+            color: #22c55e;
+            margin-top: 10px;
+        }
+
+        /* ⚡ ACTIONS */
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        /* ✅ NEW: form styling */
+        .actions form {
+            flex: 1;
+        }
+
+        .actions input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 6px;
+            border: none;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .deposit {
+            background: #22c55e;
+            color: white;
+        }
+
+        .withdraw {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        /* 📊 INFO */
+        .info {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- 🔝 NAVBAR -->
+<div class="navbar">
+    <div class="logo">💰 Fintech App</div>
+    <a href="/logout" class="logout">Logout</a>
+</div>
+
+<!-- 📦 MAIN CONTENT -->
+<div class="container">
+
+    <div class="welcome">
+        Welcome back, <b>{{ username }}</b> 👋
+    </div>
+
+    <!-- 💳 BALANCE CARD -->
+    <div class="card">
+        <div class="info">Account Balance</div>
+        <div class="balance">KES {{ "%.2f"|format(balance) }}</div>
+
+        <div class="actions">
+
+            <!-- 💰 DEPOSIT -->
+            <form method="POST" action="/deposit">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                <input 
+                    type="number" 
+                    name="amount" 
+                    placeholder="Enter amount" 
+                    required
+                >
+
+                <button class="btn deposit">Deposit</button>
+            </form>
+
+            <!-- 💸 WITHDRAW -->
+            <form method="POST" action="/withdraw">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+                <input 
+                    type="number" 
+                    name="amount" 
+                    placeholder="Enter amount" 
+                    required
+                >
+
+                <button class="btn withdraw">Withdraw</button>
+            </form>
+
+        </div>
+    </div>
+
+    <!-- 📧 USER INFO -->
+    <div class="card">
+        <div class="info">Account Info</div>
+        <p>📧 {{ email }}</p>
+    </div>
+
+</div>
+
+</body>
+</html>

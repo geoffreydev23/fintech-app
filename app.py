@@ -44,6 +44,32 @@ except:
     OpenAI = None
 
 app = Flask(__name__)
+# 🔧 TEMP: Add balance column (RUN ONCE ONLY)
+conn = get_db_connection()
+cur = conn.cursor()
+
+try:
+    cur.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
+    conn.commit()
+    print("✅ Balance column added")
+except Exception as e:
+    print("⚠️ Maybe already exists:", e)
+
+cur.close()
+conn.close()
+# 🔧 TEMP: Add balance column (RUN ONCE ONLY)
+conn = get_db_connection()
+cur = conn.cursor()
+
+try:
+    cur.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
+    conn.commit()
+    print("✅ Balance column added")
+except Exception as e:
+    print("⚠️ Maybe already exists:", e)
+
+cur.close()
+conn.close()
 app.secret_key = "super_secret_key_change_this"
 
 # 🔐 SESSION SECURITY
@@ -445,6 +471,111 @@ def login():
             return render_template("login.html", error="Invalid login")
 
     return render_template('login.html')
+
+# 🏠 DASHBOARD (WITH BALANCE)
+@app.route('/')
+def dashboard():
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    user_id = session['user_id']
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    if DATABASE_URL:
+        cur.execute("SELECT username, email, balance FROM users WHERE id=%s", (user_id,))
+    else:
+        cur.execute("SELECT username, email, balance FROM users WHERE id=?", (user_id,))
+
+    user = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    if not user:
+        session.clear()
+        return redirect('/login')
+
+    return render_template(
+        "dashboard.html",
+        username=user[0],
+        email=user[1],
+        balance=float(user[2] or 0)
+    )
+
+# 💰 DEPOSIT
+@app.route('/deposit', methods=['POST'])
+def deposit():
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    amount = float(request.form['amount'])
+
+    if amount <= 0:
+        return redirect('/')
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    if DATABASE_URL:
+        cur.execute(
+            "UPDATE users SET balance = balance + %s WHERE id=%s",
+            (amount, session['user_id'])
+        )
+    else:
+        cur.execute(
+            "UPDATE users SET balance = balance + ? WHERE id=?",
+            (amount, session['user_id'])
+        )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect('/')
+
+# 💸 WITHDRAW
+@app.route('/withdraw', methods=['POST'])
+def withdraw():
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    amount = float(request.form['amount'])
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    # 🔍 Get current balance
+    if DATABASE_URL:
+        cur.execute("SELECT balance FROM users WHERE id=%s", (session['user_id'],))
+    else:
+        cur.execute("SELECT balance FROM users WHERE id=?", (session['user_id'],))
+
+    balance = cur.fetchone()[0]
+
+    if amount <= 0 or amount > balance:
+        cur.close()
+        conn.close()
+        return redirect('/')
+
+    # 💸 Deduct
+    if DATABASE_URL:
+        cur.execute(
+            "UPDATE users SET balance = balance - %s WHERE id=%s",
+            (amount, session['user_id'])
+        )
+    else:
+        cur.execute(
+            "UPDATE users SET balance = balance - ? WHERE id=?",
+            (amount, session['user_id'])
+        )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return redirect('/')
 
 # 🔑 REQUEST RESET (FIXED TO USE EMAIL)
 @app.route('/request-reset', methods=['GET', 'POST'])
