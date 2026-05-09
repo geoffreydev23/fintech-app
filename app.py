@@ -455,7 +455,12 @@ def deposit():
     if 'user_id' not in session:
         return redirect('/login')
 
-    amount = float(request.form['amount'])
+    amount_text = request.form.get('amount', '').strip()
+
+    if not amount_text:
+        return redirect('/dashboard')
+
+    amount = float(amount_text)
 
     if amount <= 0:
         return redirect('/dashboard')
@@ -486,7 +491,12 @@ def withdraw():
     if 'user_id' not in session:
         return redirect('/login')
 
-    amount = float(request.form['amount'])
+    amount_text = request.form.get('amount', '').strip()
+
+    if not amount_text:
+        return redirect('/dashboard')
+
+    amount = float(amount_text)
 
     conn = get_db_connection()
     cur = conn.cursor()
@@ -753,7 +763,12 @@ def dashboard():
     cur = conn.cursor()
 
     if request.method == 'POST':
-        amount = float(request.form['amount'])
+        amount_text = request.form.get('amount', '').strip()
+
+        if not amount_text:
+            return redirect('/dashboard')
+
+        amount = float(amount_text)
         t_type = request.form['type']
         source = request.form['source']
         desc = request.form['description']
