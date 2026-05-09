@@ -739,6 +739,10 @@ def logout():
     session.clear()
     return redirect('/login')
 
+@app.route('/')
+def home():
+    return redirect('/dashboard')
+
 # 🌐 HOME
 @app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
