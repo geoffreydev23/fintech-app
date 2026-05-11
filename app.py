@@ -426,11 +426,15 @@ def login():
         cur = conn.cursor()
 
         if DATABASE_URL:
-            # PostgreSQL ✅
-            cur.execute("SELECT * FROM users WHERE username=%s", (username,))
+            cur.execute(
+                "SELECT id, username, email, password FROM users WHERE username=%s",
+                (username,)
+            )
         else:
-            # SQLite ✅ FIXED
-            cur.execute("SELECT * FROM users WHERE username=?", (username,))
+            cur.execute(
+                "SELECT id, username, email, password FROM users WHERE username=?",
+        (username,)
+            )
 
         user = cur.fetchone()
 
@@ -459,8 +463,11 @@ def deposit():
 
     if not amount_text:
         return redirect('/dashboard')
-
-    amount = float(amount_text)
+    
+    try:
+        amount = float(amount_text)
+    except:
+        return redirect('/dashboard')
 
     if amount <= 0:
         return redirect('/dashboard')
@@ -495,9 +502,10 @@ def withdraw():
 
     if not amount_text:
         return redirect('/dashboard')
-
-    amount = float(amount_text)
-
+    try:
+        amount = float(amount_text)
+    except:
+        return redirect('/dashboard')
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -531,6 +539,47 @@ def withdraw():
     conn.close()
 
     return redirect('/dashboard')
+
+# 💳 M-PESA DEPOSIT
+@app.route('/mpesa', methods=['POST'])
+def mpesa():
+    if 'user_id' not in session:
+        return redirect('/login')
+
+    try:
+        phone = request.form['phone']
+        amount = float(request.form['amount'])
+
+        # ✅ Simple validation
+        if amount <= 0:
+            return redirect('/dashboard')
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # 💰 Add money to balance
+        if DATABASE_URL:
+            cur.execute(
+                "UPDATE users SET balance = balance + %s WHERE id=%s",
+                (amount, session['user_id'])
+            )
+        else:
+            cur.execute(
+                "UPDATE users SET balance = balance + ? WHERE id=?",
+                (amount, session['user_id'])
+            )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        print(f"✅ M-Pesa deposit success: {phone} deposited {amount}")
+
+        return redirect('/dashboard?success=mpesa')
+
+    except Exception as e:
+        print("M-Pesa Error:", e)
+        return redirect('/dashboard')
 
 # 🔑 REQUEST RESET (FIXED TO USE EMAIL)
 @app.route('/request-reset', methods=['GET', 'POST'])
@@ -763,16 +812,21 @@ def dashboard():
     cur = conn.cursor()
 
     if request.method == 'POST':
+
         amount_text = request.form.get('amount', '').strip()
 
         if not amount_text:
             return redirect('/dashboard')
 
-        amount = float(amount_text)
-        t_type = request.form['type']
-        source = request.form['source']
-        desc = request.form['description']
-        category = request.form['category'] or auto_category(desc)
+        try:
+            amount = float(amount_text)
+        except:
+            return redirect('/dashboard')
+
+        t_type = request.form.get('type', '')
+        source = request.form.get('source', '')
+        desc = request.form.get('description', '')
+        category = request.form.get('category', '') or auto_category(desc)
 
         # ➕ INSERT TRANSACTION
         if DATABASE_URL:
@@ -801,6 +855,19 @@ def dashboard():
         )
 
     transactions = cur.fetchall()
+    # 💰 GET REAL ACCOUNT BALANCE
+    if DATABASE_URL:
+        cur.execute(
+            "SELECT balance FROM users WHERE id=%s",
+            (session['user_id'],)
+        )
+    else:
+        cur.execute(
+            "SELECT balance FROM users WHERE id=?",
+            (session['user_id'],)
+        )
+
+    real_balance = cur.fetchone()[0] or 0
 
     cur.close()
     conn.close()
@@ -824,7 +891,7 @@ def dashboard():
         transactions=transactions,
         income=income,
         expenses=expenses,
-        balance=balance,
+        balance=real_balance,
         category_data=category_data,
         insights=insights,
         budget_data=budget_data,

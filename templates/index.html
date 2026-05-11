@@ -41,6 +41,7 @@
             margin: 5px 0;
             border-radius: 5px;
             border: none;
+            box-sizing: border-box;
         }
 
         button {
@@ -51,6 +52,11 @@
             color: white;
             font-weight: bold;
             border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            opacity: 0.9;
         }
 
         .danger {
@@ -116,7 +122,7 @@
 
     <!-- 🔴 LOGOUT BUTTON -->
     <a href="/logout">
-        <button class="logout-btn">🚪 Logout</button>
+        <button type="button" class="logout-btn">🚪 Logout</button>
     </a>
 
     <h1>💰 Smart Finance Tracker</h1>
@@ -144,14 +150,12 @@
 
         <p>Saved: Ksh {{savings_goal.saved}}</p>
         <p>Target: Ksh {{savings_goal.target}}</p>
-        <p>Status: {{savings_goal.status}}</p>
 
         <div class="progress-bar">
             <div class="progress-fill"></div>
         </div>
 
         <p>{{savings_goal.progress}}% complete</p>
-        <p>{{savings_goal.message}}</p>
     </div>
 
     <div class="chart-container">
@@ -160,9 +164,14 @@
 
     <div class="summary">
         <h3>🤖 AI Insights</h3>
-        {% for insight in insights %}
-            <p>{{insight}}</p>
-        {% endfor %}
+
+        {% if insights %}
+            {% for insight in insights %}
+                <p>{{insight}}</p>
+            {% endfor %}
+        {% else %}
+            <p>No insights yet.</p>
+        {% endif %}
     </div>
 
     <div class="summary">
@@ -170,62 +179,119 @@
 
         {% for category, data in budget_data.items() %}
             <p>
-                <b>{{category}}</b>: 
-                Spent Ksh {{data.spent}} / Recommended Ksh {{data.recommended}}
+                <b>{{category}}</b>:
+                Spent Ksh {{data.spent}} /
+                Recommended Ksh {{data.recommended}}
             </p>
         {% endfor %}
 
         <h4>💡 Tips</h4>
+
         {% for tip in budget_tips %}
             <p>{{tip}}</p>
         {% endfor %}
     </div>
 
     <!-- 📝 ADD TRANSACTION -->
-    <form method="POST">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <form method="POST" action="/dashboard">
 
-        <input name="amount" placeholder="Amount" required>
+        <input type="hidden"
+               name="_csrf_token"
+               value="{{ csrf_token() }}">
+
+        <input
+            type="number"
+            step="0.01"
+            min="1"
+            name="amount"
+            placeholder="Amount"
+            required
+        >
 
         <select name="type">
             <option value="expense">Expense</option>
             <option value="income">Income</option>
         </select>
 
-        <input name="category" placeholder="Category (optional)">
-        <input name="source" placeholder="Source (mpesa, crypto, bank)">
-        <input name="description" placeholder="Description">
+        <input
+            name="category"
+            placeholder="Category (optional)"
+        >
 
-        <button type="submit" onclick="showLoading(this)">Add Transaction</button>
+        <input
+            name="source"
+            placeholder="Source (mpesa, crypto, bank)"
+            required
+        >
+
+        <input
+            name="description"
+            placeholder="Description"
+            required
+        >
+
+        <button type="submit">
+            Add Transaction
+        </button>
+
     </form>
 
     <!-- 💳 M-PESA -->
     <div class="summary">
+
         <h3>💳 M-Pesa Deposit</h3>
 
         <form method="POST" action="/mpesa">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
-            <input name="phone" placeholder="Phone Number (07XXXXXXXX)" required>
-            <input name="amount" placeholder="Amount" required>
+            <input type="hidden"
+                   name="_csrf_token"
+                   value="{{ csrf_token() }}">
 
-            <button type="submit" onclick="showLoading(this)">Deposit via M-Pesa</button>
+            <input
+                name="phone"
+                placeholder="Phone Number (07XXXXXXXX)"
+                required
+            >
+
+            <input
+                type="number"
+                step="0.01"
+                min="1"
+                name="amount"
+                placeholder="Amount"
+                required
+            >
+
+            <button type="submit">
+                Deposit via M-Pesa
+            </button>
+
         </form>
+
     </div>
 
     <!-- 🗑️ CLEAR -->
     <form method="POST" action="/clear">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
-        <button class="danger" onclick="showLoading(this)">🗑️ Clear All Data</button>
+        <input type="hidden"
+               name="_csrf_token"
+               value="{{ csrf_token() }}">
+
+        <button type="submit" class="danger">
+            🗑️ Clear All Data
+        </button>
+
     </form>
 
     <a href="/archive">
-        <button class="archive-btn">📂 View Archive</button>
+        <button type="button" class="archive-btn">
+            📂 View Archive
+        </button>
     </a>
 
     <div>
         <h2>Transactions</h2>
+
         {% for t in transactions %}
             <div class="card">
                 <strong>Ksh {{t[2]}}</strong><br>
@@ -235,17 +301,24 @@
         {% endfor %}
     </div>
 
+    <!-- 🤖 AI CHAT -->
     <div class="summary">
+
         <h3>🤖 AI Assistant</h3>
 
         <div id="chatBox"></div>
 
         <input id="userInput" placeholder="Ask me anything...">
-        <button onclick="sendMessage()">Send</button>
+
+        <button type="button" onclick="sendMessage()">
+            Send
+        </button>
+
     </div>
 
 </div>
 
+<!-- 📊 CHART -->
 <script>
 const data = {{ category_data | tojson }};
 const labels = Object.keys(data);
@@ -264,38 +337,45 @@ new Chart(ctx, {
 });
 </script>
 
-<script>
-function showLoading(btn) {
-    btn.innerText = "Processing...";
-    btn.disabled = true;
-}
-</script>
-
+<!-- 🤖 CHAT -->
 <script>
 function sendMessage() {
+
     let input = document.getElementById("userInput");
-    let message = input.value;
+    let message = input.value.trim();
+
+    if (!message) return;
 
     fetch("/chat", {
         method: "POST",
         headers: {
             "Content-Type": "application/x-www-form-urlencoded"
         },
-        body: "message=" + encodeURIComponent(message)
+        body:
+            "message=" + encodeURIComponent(message) +
+            "&_csrf_token={{ csrf_token() }}"
     })
     .then(response => response.text())
     .then(data => {
+
         let chatBox = document.getElementById("chatBox");
 
-        chatBox.innerHTML += `<div class="chat-user">${message}</div>`;
-        chatBox.innerHTML += `<div class="chat-ai">${data}</div>`;
+        chatBox.innerHTML += `
+            <div class="chat-user">${message}</div>
+        `;
+
+        chatBox.innerHTML += `
+            <div class="chat-ai">${data}</div>
+        `;
 
         input.value = "";
+
         chatBox.scrollTop = chatBox.scrollHeight;
     });
 }
 </script>
 
+<!-- 📱 SERVICE WORKER -->
 <script>
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/static/service-worker.js")
