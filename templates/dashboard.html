@@ -14,12 +14,16 @@
 
         /* 🔝 NAVBAR */
         .navbar {
-            background: #020617;
-            padding: 15px 25px;
+            background: rgba(2,6,23,0.85);
+            backdrop-filter: blur(15px);
+            padding: 18px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid #1e293b;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
 
         .logo {
@@ -51,11 +55,17 @@
 
         /* 💳 CARD */
         .card {
-            background: #1e293b;
-            padding: 20px;
-            border-radius: 12px;
+            background: #111827;
+            padding: 24px;
+            border-radius: 18px;
             margin-bottom: 20px;
+            border: 1px solid #1f2937;
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            transition: 0.3s;
+        }
+
+        .card:hover{
+            transform: translateY(-3px);
         }
 
         .balance {
@@ -99,12 +109,13 @@
 
         .btn {
             width: 100%;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 14px;
+            border-radius: 12px;
             border: none;
             cursor: pointer;
             font-weight: bold;
             transition: 0.3s;
+            font-size: 15px;
         }
 
         .deposit {
@@ -127,6 +138,62 @@
             font-size: 14px;
             color: #94a3b8;
             margin-bottom: 5px;
+        }
+
+        /* 💳 HERO WALLET */
+        .hero-card{
+            background: linear-gradient(135deg,#22c55e,#15803d);
+            padding: 30px;
+            border-radius: 24px;
+            margin-bottom: 25px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wallet-top{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+        }
+
+        .wallet-label{
+            color:#dcfce7;
+            font-size:14px;
+            margin-bottom:10px;
+        }
+
+        .wallet-balance{
+            font-size:38px;
+            font-weight:bold;
+            color:white;
+        }
+
+        .wallet-icon{
+            font-size:50px;
+        }
+
+        .wallet-chip{
+            width:60px;
+            height:45px;
+            background:gold;
+            border-radius:10px;
+            margin-top:25px;
+        }
+
+        .wallet-footer{
+            display:flex;
+            justify-content:space-between;
+            margin-top:30px;
+        }
+
+        .wallet-footer small{
+            color:#dcfce7;
+        }
+
+        .wallet-footer h4{
+            margin:5px 0 0 0;
+            color:white;
         }
 
         /* 📱 MOBILE */
@@ -153,13 +220,41 @@
         Welcome back, <b>{{ username }}</b> 👋
     </div>
 
-    <!-- 💳 BALANCE CARD -->
-    <div class="card">
+    <!-- 💳 HERO WALLET CARD -->
+    <div class="hero-card">
 
-        <div class="info">Account Balance</div>
+        <div class="wallet-top">
 
-        <div class="balance">
-            KES {{ "%.2f"|format(balance) }}
+            <div>
+                <div class="wallet-label">
+                    Total Balance
+                </div>
+
+                <div class="wallet-balance">
+                    KES {{ "%.2f"|format(balance) }}
+                </div>
+            </div>
+
+            <div class="wallet-icon">
+                💳
+            </div>
+
+        </div>
+
+        <div class="wallet-chip"></div>
+
+        <div class="wallet-footer">
+
+            <div>
+                <small>Account Type</small>
+                <h4>Premium Wallet</h4>
+            </div>
+
+            <div>
+                <small>Status</small>
+                <h4>Active</h4>
+            </div>
+
         </div>
 
         <div class="actions">

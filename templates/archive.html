@@ -1,29 +1,179 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Archive</title>
-</head>
-<body style="background:#0f172a; color:white; font-family:Arial; padding:20px;">
+{% extends "app_base.html" %}
+
+{% block content %}
 
 <h1>📂 Archived Transactions</h1>
 
-<a href="/" style="color:lightgreen;">⬅ Back to Dashboard</a>
+<p style="
+    margin-top:10px;
+    color:#94a3b8;
+">
+    Deleted transactions are stored here and can be restored at any time.
+</p>
 
-{% for t in archived %}
-    <div style="background:#1e293b; padding:10px; margin-top:10px; border-radius:10px;">
-        Ksh {{t[1]}} - {{t[3]}} ({{t[2]}})
-        <br><br>
+<!-- SUMMARY CARD -->
 
-        <!-- 🔒 SECURE RESTORE FORM -->
-        <form method="POST" action="/restore/{{t[0]}}">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <button style="background:orange; border:none; padding:6px; border-radius:5px;">
-                🔄 Restore
-            </button>
-        </form>
+<div style="
+    margin-top:25px;
+    background:#1e293b;
+    padding:20px;
+    border-radius:15px;
+">
+
+    <h3>
+        Total Archived Transactions
+    </h3>
+
+    <h2 style="
+        color:#22c55e;
+        margin-top:10px;
+    ">
+        {{ archived_transactions|length }}
+    </h2>
+
+</div>
+
+<!-- TRANSACTIONS -->
+
+<div style="margin-top:30px;">
+
+{% if archived_transactions %}
+
+    {% for t in archived_transactions %}
+
+    <div style="
+        background:#1e293b;
+        padding:20px;
+        border-radius:15px;
+        margin-bottom:15px;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        flex-wrap:wrap;
+        gap:15px;
+    ">
+
+        <div>
+
+            <h3>
+
+                {% if t.category %}
+                    {{ t.category }}
+                {% else %}
+                    Uncategorized
+                {% endif %}
+
+            </h3>
+
+            <p style="
+                color:#94a3b8;
+                margin-top:5px;
+            ">
+
+                {% if t.description %}
+                    {{ t.description }}
+                {% else %}
+                    No description
+                {% endif %}
+
+            </p>
+
+            <p style="
+                margin-top:8px;
+                color:#cbd5e1;
+            ">
+
+                {% if t.type == "income" %}
+
+                    <span style="color:#22c55e;">
+                        Income
+                    </span>
+
+                {% else %}
+
+                    <span style="color:#ef4444;">
+                        Expense
+                    </span>
+
+                {% endif %}
+
+            </p>
+
+        </div>
+
+        <div style="text-align:right;">
+
+            <h3>
+
+                {% if t.currency %}
+                    {{ t.currency }}
+                {% else %}
+                    KES
+                {% endif %}
+
+                {{ t.amount }}
+
+            </h3>
+
+            <form
+                method="POST"
+                action="/restore/{{ t.id }}"
+                style="margin-top:10px;"
+            >
+
+                <input
+                    type="hidden"
+                    name="_csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+                <button
+                    type="submit"
+                    style="
+                        background:#f59e0b;
+                        border:none;
+                        padding:10px 18px;
+                        border-radius:10px;
+                        color:white;
+                        font-weight:bold;
+                        cursor:pointer;
+                    "
+                >
+                    🔄 Restore
+                </button>
+
+            </form>
+
+        </div>
 
     </div>
-{% endfor %}
 
-</body>
-</html>
+    {% endfor %}
+
+{% else %}
+
+    <div style="
+        background:#1e293b;
+        padding:40px;
+        border-radius:15px;
+        text-align:center;
+    ">
+
+        <h2>
+            📂 Archive Empty
+        </h2>
+
+        <p style="
+            color:#94a3b8;
+            margin-top:10px;
+        ">
+            No archived transactions found.
+        </p>
+
+    </div>
+
+{% endif %}
+
+</div>
+
+{% endblock %}

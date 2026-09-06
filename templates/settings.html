@@ -1,0 +1,271 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+
+<h1 style="margin-bottom:10px;">
+    ⚙️ Settings
+</h1>
+
+<p style="color:#94a3b8; margin-bottom:30px;">
+    Manage your FinFlow account preferences.
+</p>
+
+<!-- ACCOUNT SETTINGS -->
+
+<div style="
+    background:#1e293b;
+    padding:20px;
+    border-radius:15px;
+    margin-bottom:20px;
+">
+
+    <h2>👤 Account</h2>
+
+    <div style="margin-top:15px;">
+
+        <p>
+            <strong>Username:</strong>
+            {{ session.username }}
+        </p>
+
+        <p style="margin-top:10px;">
+            <strong>Email:</strong>
+            {{ session.email if session.email else "Not Available" }}
+        </p>
+
+    </div>
+
+</div>
+
+<!-- SECURITY -->
+
+<div style="
+    background:#1e293b;
+    padding:20px;
+    border-radius:15px;
+    margin-bottom:20px;
+">
+
+    <h2>🔒 Security</h2>
+
+    <div style="margin-top:15px;">
+
+        <a href="/change-password"
+           style="
+               display:inline-block;
+               background:#3b82f6;
+               color:white;
+               text-decoration:none;
+               padding:10px 15px;
+               border-radius:10px;
+           ">
+            🔒 Change Password
+        </a>
+
+    </div>
+
+</div>
+
+<!-- PREFERENCES -->
+
+<div style="
+    background:#1e293b;
+    padding:20px;
+    border-radius:15px;
+    margin-bottom:20px;
+">
+
+    <h2>🎨 Preferences</h2>
+
+    <form method="POST" action="/update-currency">
+
+        <div style="margin-top:15px;">
+
+            <label>
+                Currency:
+            </label>
+
+            <select
+                name="currency"
+                style="
+                    width:100%;
+                    margin-top:10px;
+                    padding:10px;
+                    background:#0f172a;
+                    color:white;
+                    border:none;
+                    border-radius:10px;
+                "
+            >
+
+                <option value="KES"
+                    {% if preferred_currency == 'KES' %}
+                    selected
+                    {% endif %}
+                >
+                    KES (Kenyan Shilling)
+                </option>
+
+                <option value="USD"
+                    {% if preferred_currency == 'USD' %}
+                    selected
+                    {% endif %}
+                >
+                    USD (US Dollar)
+                </option>
+
+                <option value="EUR"
+                    {% if preferred_currency == 'EUR' %}
+                    selected
+                    {% endif %}
+                >
+                    EUR (Euro)
+                </option>
+
+                <option value="GBP"
+                    {% if preferred_currency == 'GBP' %}
+                    selected
+                    {% endif %}
+                >
+                    GBP (British Pound)
+                </option>
+
+            </select>
+
+            <button
+                type="submit"
+                style="
+                    margin-top:15px;
+                    background:#22c55e;
+                    color:white;
+                    border:none;
+                    padding:12px 20px;
+                    border-radius:10px;
+                    cursor:pointer;
+                    font-weight:bold;
+                "
+            >
+                💾 Save Currency
+            </button>
+
+        </div>
+
+    </form>
+
+</div>
+
+<!-- NOTIFICATIONS -->
+
+<div style="
+    background:#1e293b;
+    padding:20px;
+    border-radius:15px;
+    margin-bottom:20px;
+">
+
+    <h2>🔔 Notifications</h2>
+
+    <div style="margin-top:15px;">
+
+        <label style="
+            display:flex;
+            align-items:center;
+            gap:10px;
+        ">
+
+            <input
+                type="checkbox"
+                checked
+            >
+
+            Enable Notifications
+
+        </label>
+
+    </div>
+
+</div>
+
+<!-- REPORTS & EXPORTS -->
+
+<div style="
+    background:#1e293b;
+    padding:20px;
+    border-radius:15px;
+    margin-bottom:20px;
+">
+
+    <h2>📊 Reports & Exports</h2>
+
+    <p style="
+        color:#94a3b8;
+        margin-top:10px;
+        margin-bottom:20px;
+    ">
+        Download your financial data and analytics reports.
+    </p>
+
+    <div style="
+        display:flex;
+        flex-wrap:wrap;
+        gap:10px;
+    ">
+
+        <a href="/export-transactions"
+           style="
+               background:#22c55e;
+               color:white;
+               text-decoration:none;
+               padding:12px 18px;
+               border-radius:10px;
+               font-weight:bold;
+           ">
+            📄 Export Transactions CSV
+        </a>
+
+        <a href="/export-analytics-pdf"
+           style="
+               background:#3b82f6;
+               color:white;
+               text-decoration:none;
+               padding:12px 18px;
+               border-radius:10px;
+               font-weight:bold;
+           ">
+            📊 Download Analytics PDF
+        </a>
+
+    </div>
+
+</div>
+
+<!-- DANGER ZONE -->
+
+<div style="
+    background:#7f1d1d;
+    padding:20px;
+    border-radius:15px;
+">
+
+    <h2>⚠️ Danger Zone</h2>
+
+    <p style="margin-top:10px;">
+        Logout from your account.
+    </p>
+
+    <a href="/logout"
+       style="
+           display:inline-block;
+           margin-top:15px;
+           background:#ef4444;
+           color:white;
+           text-decoration:none;
+           padding:10px 20px;
+           border-radius:10px;
+       ">
+        Logout
+    </a>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        FinFlow
+    </title>
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+
+    /*====================================================*/
+
+    /* ROOT */
+
+    /*====================================================*/
+
+    :root{
+
+        --bg:#0f172a;
+
+        --sidebar:#111827;
+
+        --card:#1e293b;
+
+        --card2:#273449;
+
+        --border:#334155;
+
+        --text:#f8fafc;
+
+        --muted:#94a3b8;
+
+        --green:#22c55e;
+
+        --blue:#3b82f6;
+
+        --red:#ef4444;
+
+        --orange:#f59e0b;
+
+        --shadow:0 15px 40px rgba(0,0,0,.25);
+
+        --radius:18px;
+
+    }
+
+    /*====================================================*/
+
+    /* RESET */
+
+    /*====================================================*/
+
+    *{
+
+        margin:0;
+
+        padding:0;
+
+        box-sizing:border-box;
+
+    }
+
+    html{
+
+        scroll-behavior:smooth;
+
+    }
+
+    body{
+
+        font-family:'Inter',sans-serif;
+
+        background:var(--bg);
+
+        color:var(--text);
+
+        overflow-x:hidden;
+
+    }
+
+    a{
+
+        text-decoration:none;
+
+        color:inherit;
+
+    }
+
+    button{
+
+        font-family:inherit;
+
+        cursor:pointer;
+
+    }
+
+    /*====================================================*/
+
+    /* LAYOUT */
+
+    /*====================================================*/
+
+    .app-layout{
+
+        display:flex;
+
+        min-height:100vh;
+
+    }
+
+    /*====================================================*/
+
+    /* SIDEBAR */
+
+    /*====================================================*/
+
+    .sidebar{
+
+        width:270px;
+
+        background:var(--sidebar);
+
+        border-right:1px solid var(--border);
+
+        display:flex;
+
+        flex-direction:column;
+
+        justify-content:space-between;
+
+        position:fixed;
+
+        top:0;
+
+        left:0;
+
+        bottom:0;
+
+        padding:30px 20px;
+
+        z-index:100;
+
+    }
+
+    .logo{
+
+        display:flex;
+
+        align-items:center;
+
+        gap:15px;
+
+        margin-bottom:40px;
+
+    }
+
+    .logo-icon{
+
+        width:52px;
+
+        height:52px;
+
+        border-radius:14px;
+
+        background:linear-gradient(
+            135deg,
+            var(--green),
+            #16a34a
+        );
+
+        display:flex;
+
+        align-items:center;
+
+        justify-content:center;
+
+        font-size:24px;
+
+        color:white;
+
+        box-shadow:var(--shadow);
+
+    }
+
+    .logo-title{
+
+        font-size:24px;
+
+        font-weight:700;
+
+    }
+
+    .logo-sub{
+
+        color:var(--muted);
+
+        font-size:13px;
+
+        margin-top:4px;
+
+    }
+
+    .sidebar-menu{
+
+        display:flex;
+
+        flex-direction:column;
+
+        gap:8px;
+
+    }
+
+    .sidebar-link{
+
+        display:flex;
+
+        align-items:center;
+
+        gap:12px;
+
+        padding:15px 16px;
+
+        border-radius:14px;
+
+        color:#cbd5e1;
+
+        transition:.25s;
+
+        font-weight:500;
+
+    }
+
+    .sidebar-link:hover{
+
+        background:var(--card);
+
+        color:white;
+
+        transform:translateX(5px);
+
+    }
+
+    .sidebar-link.active{
+
+        background:linear-gradient(
+            90deg,
+            rgba(34,197,94,.20),
+            rgba(34,197,94,.06)
+        );
+
+        color:white;
+
+        border-left:4px solid var(--green);
+
+        font-weight:600;
+
+    }
+
+    .sidebar-footer{
+
+        color:var(--muted);
+
+        font-size:13px;
+
+        line-height:1.8;
+
+        border-top:1px solid var(--border);
+
+        padding-top:20px;
+
+    }
+
+    /*====================================================*/
+
+    /* MAIN */
+
+    /*====================================================*/
+
+    .main{
+
+        flex:1;
+
+        margin-left:270px;
+
+        display:flex;
+
+        flex-direction:column;
+
+        min-height:100vh;
+
+    }
+
+    /*====================================================*/
+
+    /* TOPBAR */
+
+    /*====================================================*/
+
+    .topbar{
+
+        height:78px;
+
+        background:rgba(17,24,39,.95);
+
+        backdrop-filter:blur(12px);
+
+        border-bottom:1px solid var(--border);
+
+        display:flex;
+
+        align-items:center;
+
+        justify-content:space-between;
+
+        padding:0 35px;
+
+        position:sticky;
+
+        top:0;
+
+        z-index:50;
+
+    }
+
+    .search-box{
+
+        display:flex;
+
+        align-items:center;
+
+        gap:10px;
+
+        width:350px;
+
+        background:var(--card);
+
+        padding:12px 18px;
+
+        border-radius:14px;
+
+        border:1px solid var(--border);
+
+    }
+
+    .search-box input{
+
+        flex:1;
+
+        background:none;
+
+        border:none;
+
+        outline:none;
+
+        color:white;
+
+        font-size:15px;
+
+    }
+
+    .search-box input::placeholder{
+
+        color:var(--muted);
+
+    }
+
+    .top-right{
+
+        display:flex;
+
+        align-items:center;
+
+        gap:18px;
+
+    }
+
+    .notification{
+
+        position:relative;
+
+        font-size:22px;
+
+    }
+
+    .notification-badge{
+
+        position:absolute;
+
+        top:-8px;
+
+        right:-10px;
+
+        background:var(--red);
+
+        color:white;
+
+        font-size:11px;
+
+        min-width:20px;
+
+        height:20px;
+
+        border-radius:50%;
+
+        display:flex;
+
+        align-items:center;
+
+        justify-content:center;
+
+        font-weight:700;
+
+    }
+
+    .user-box{
+
+        display:flex;
+
+        align-items:center;
+
+        gap:12px;
+
+    }
+
+    .avatar{
+
+        width:45px;
+
+        height:45px;
+
+        border-radius:50%;
+
+        background:linear-gradient(
+            135deg,
+            var(--blue),
+            #1d4ed8
+        );
+
+        display:flex;
+
+        align-items:center;
+
+        justify-content:center;
+
+        font-weight:700;
+
+        color:white;
+
+    }
+
+    .user-name{
+
+        font-weight:600;
+
+    }
+
+    .user-role{
+
+        color:var(--muted);
+
+        font-size:12px;
+
+        margin-top:2px;
+
+    }
+
+    /*====================================================*/
+
+    /* PAGE */
+
+    /*====================================================*/
+
+    .page-content{
+
+        padding:30px;
+
+        flex:1;
+
+    }
+
+    .page-card{
+
+        background:var(--card);
+
+        border:1px solid var(--border);
+
+        border-radius:22px;
+
+        padding:30px;
+
+        box-shadow:var(--shadow);
+
+        animation:fadeIn .4s ease;
+
+    }
+
+    @keyframes fadeIn{
+
+        from{
+
+            opacity:0;
+
+            transform:translateY(10px);
+
+        }
+
+        to{
+
+            opacity:1;
+
+            transform:none;
+
+        }
+
+    }
+
+    /*====================================================*/
+
+    /* FLASH */
+
+    /*====================================================*/
+
+    .flash{
+
+        padding:15px;
+
+        border-radius:12px;
+
+        margin-bottom:20px;
+
+        font-weight:600;
+
+    }
+
+    .flash.success{
+
+        background:#14532d;
+
+        color:#bbf7d0;
+
+        border:1px solid var(--green);
+
+    }
+
+    .flash.error{
+
+        background:#7f1d1d;
+
+        color:#fecaca;
+
+        border:1px solid var(--red);
+
+    }
+
+    /*====================================================*/
+
+    /* SCROLLBAR */
+
+    /*====================================================*/
+
+    ::-webkit-scrollbar{
+
+        width:10px;
+
+    }
+
+    ::-webkit-scrollbar-track{
+
+        background:var(--bg);
+
+    }
+
+    ::-webkit-scrollbar-thumb{
+
+        background:#475569;
+
+        border-radius:20px;
+
+    }
+
+    ::-webkit-scrollbar-thumb:hover{
+
+        background:#64748b;
+
+    }
+
+    /*====================================================*/
+
+    /* RESPONSIVE */
+
+    /*====================================================*/
+
+    @media(max-width:1100px){
+
+        .sidebar{
+
+            width:220px;
+
+        }
+
+        .main{
+
+            margin-left:220px;
+
+        }
+
+    }
+
+    @media(max-width:900px){
+
+        .app-layout{
+
+            flex-direction:column;
+
+        }
+
+        .sidebar{
+
+            position:relative;
+
+            width:100%;
+
+            height:auto;
+
+            border-right:none;
+
+            border-bottom:1px solid var(--border);
+
+        }
+
+        .main{
+
+            margin-left:0;
+
+        }
+
+        .topbar{
+
+            flex-direction:column;
+
+            height:auto;
+
+            gap:15px;
+
+            padding:20px;
+
+            align-items:stretch;
+
+        }
+
+        .search-box{
+
+            width:100%;
+
+        }
+
+        .top-right{
+
+            justify-content:space-between;
+
+        }
+
+        .page-content{
+
+            padding:20px;
+
+        }
+
+    }
+
+    </style>
+
+</head>
+
+<body>
+
+<div class="app-layout">
+
+    <!-- ============================= -->
+
+    <!-- SIDEBAR -->
+
+    <!-- ============================= -->
+
+    <aside class="sidebar">
+
+        <div>
+
+            <div class="logo">
+
+                <div class="logo-icon">
+
+                    💰
+
+                </div>
+
+                <div>
+
+                    <div class="logo-title">
+
+                        FinFlow
+
+                    </div>
+
+                    <div class="logo-sub">
+
+                        Smart Personal Finance
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <nav class="sidebar-menu">
+
+                <a href="/dashboard"
+                   class="sidebar-link {% if request.path == '/dashboard' %}active{% endif %}">
+
+                    🏠 Dashboard
+
+                </a>
+
+                <a href="/transactions"
+                   class="sidebar-link {% if request.path == '/transactions' %}active{% endif %}">
+
+                    📜 Transactions
+
+                </a>
+
+                <a href="/analytics"
+                   class="sidebar-link {% if request.path == '/analytics' %}active{% endif %}">
+
+                    📊 Analytics
+
+                </a>
+
+                <a href="/wallet"
+                   class="sidebar-link {% if request.path == '/wallet' %}active{% endif %}">
+
+                    💳 Wallet
+
+                </a>
+
+                <a href="/archive"
+                   class="sidebar-link {% if request.path == '/archive' %}active{% endif %}">
+
+                    📂 Archive
+
+                </a>
+
+                <a href="/ai-assistant"
+                   class="sidebar-link {% if request.path == '/ai-assistant' %}active{% endif %}">
+
+                    🤖 AI Assistant
+
+                </a>
+
+                <a href="/settings"
+                   class="sidebar-link {% if request.path == '/settings' %}active{% endif %}">
+
+                    ⚙️ Settings
+
+                </a>
+
+            </nav>
+
+        </div>
+
+        <div class="sidebar-footer">
+
+            <strong>FinFlow v2.0</strong>
+
+            <br><br>
+
+            Modern Personal Finance Platform
+
+        </div>
+
+    </aside>
+
+    <!-- ============================= -->
+
+    <!-- MAIN -->
+
+    <!-- ============================= -->
+
+    <main class="main">
+
+        <!-- TOPBAR -->
+
+        <header class="topbar">
+
+            <div class="search-box">
+
+                🔍
+
+                <input
+                    type="text"
+                    placeholder="Search..."
+                >
+
+            </div>
+
+            <div class="top-right">
+
+                <div class="notification">
+
+                    🔔
+
+                    {% if unread_count is defined and unread_count > 0 %}
+
+                        <span class="notification-badge">
+
+                            {{ unread_count }}
+
+                        </span>
+
+                    {% endif %}
+
+                </div>
+
+                <div class="user-box">
+
+                    <div class="avatar">
+
+                        {{ session.username[0]|upper if session.username else "U" }}
+
+                    </div>
+
+                    <div>
+
+                        <div class="user-name">
+
+                            {{ session.username if session.username else "User" }}
+
+                        </div>
+
+                        <div class="user-role">
+
+                            FinFlow User
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </header>
+
+        <!-- ============================= -->
+
+        <!-- PAGE CONTENT -->
+
+        <!-- ============================= -->
+
+        <section class="page-content">
+
+            <div class="page-card">
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+
+                    {% if messages %}
+
+                        {% for category, message in messages %}
+
+                            <div class="flash {{ category }}">
+
+                                {{ message }}
+
+                            </div>
+
+                        {% endfor %}
+
+                    {% endif %}
+
+                {% endwith %}
+
+                {% block content %}
+                {% endblock %}
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+</body>
+
+</html>

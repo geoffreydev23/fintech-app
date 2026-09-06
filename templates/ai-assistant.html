@@ -1,0 +1,181 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+
+<h1>🤖 FinFlow AI Assistant</h1>
+
+<p style="color:#94a3b8;margin-top:10px;">
+Ask anything about budgeting, saving, spending, investing, or your finances.
+</p>
+
+<!-- CSRF TOKEN -->
+
+<input
+    type="hidden"
+    id="csrfToken"
+    value="{{ csrf_token() }}"
+>
+
+<!-- CHAT WINDOW -->
+
+<div class="chat-container">
+
+    <div id="chatBox" class="chat-box">
+
+        <div class="ai-message">
+            👋 Hello! I'm FinFlow AI.
+            Ask me anything about your finances.
+        </div>
+
+    </div>
+
+    <div class="chat-input-area">
+
+        <input
+            type="text"
+            id="userInput"
+            placeholder="Type your question..."
+            onkeypress="if(event.key==='Enter'){sendMessage();}"
+        >
+
+        <button onclick="sendMessage()">
+            Send
+        </button>
+
+    </div>
+
+</div>
+
+<style>
+
+.chat-container{
+    margin-top:30px;
+}
+
+.chat-box{
+    height:500px;
+    overflow-y:auto;
+    background:#111827;
+    border:1px solid #1f2937;
+    border-radius:20px;
+    padding:20px;
+}
+
+.user-message{
+    background:#22c55e;
+    padding:12px;
+    border-radius:12px;
+    margin-bottom:12px;
+    text-align:right;
+    color:white;
+}
+
+.ai-message{
+    background:#1e293b;
+    padding:12px;
+    border-radius:12px;
+    margin-bottom:12px;
+    color:white;
+}
+
+.chat-input-area{
+    display:flex;
+    gap:10px;
+    margin-top:15px;
+}
+
+.chat-input-area input{
+    flex:1;
+    padding:14px;
+    border:none;
+    border-radius:12px;
+    background:#1e293b;
+    color:white;
+}
+
+.chat-input-area button{
+    background:#22c55e;
+    color:white;
+    border:none;
+    padding:14px 24px;
+    border-radius:12px;
+    cursor:pointer;
+    font-weight:bold;
+}
+
+.chat-input-area button:hover{
+    opacity:0.9;
+}
+
+</style>
+
+<script>
+
+function sendMessage(){
+
+    let input = document.getElementById("userInput");
+
+    let message = input.value.trim();
+
+    if(!message){
+        return;
+    }
+
+    let chatBox = document.getElementById("chatBox");
+
+    chatBox.innerHTML += `
+        <div class="user-message">
+            ${message}
+        </div>
+    `;
+
+    let csrfToken =
+        document.getElementById("csrfToken").value;
+
+    fetch("/chat", {
+
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/x-www-form-urlencoded"
+        },
+
+        body:
+            "message=" + encodeURIComponent(message)
+            + "&_csrf_token="
+            + encodeURIComponent(csrfToken)
+
+    })
+
+    .then(response => response.text())
+
+    .then(data => {
+
+        chatBox.innerHTML += `
+            <div class="ai-message">
+                ${data}
+            </div>
+        `;
+
+        chatBox.scrollTop =
+            chatBox.scrollHeight;
+
+    })
+
+    .catch(error => {
+
+        chatBox.innerHTML += `
+            <div class="ai-message">
+                ⚠️ Error communicating with AI Assistant.
+            </div>
+        `;
+
+    });
+
+    input.value="";
+
+}
+
+</script>
+
+{% endblock %}

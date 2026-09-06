@@ -1,255 +1,2962 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Fintech App</title>
+    <title>FinFlow</title>
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- 📱 PWA -->
     <link rel="manifest" href="/static/manifest.json">
 
-    <!-- 📊 Chart -->
+    <!-- 📊 Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
-        body {
-            font-family: Arial;
-            background: #0f172a;
-            color: white;
-            margin: 0;
-            padding: 20px;
+
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+        }
+        html{
+            scroll-behavior:smooth;
         }
 
-        h1 {
-            text-align: center;
+        #deposit,
+        #send,
+        #converter,
+        #transaction{
+            scroll-margin-top:100px;
         }
 
-        .container {
-            max-width: 500px;
-            margin: auto;
+        body{
+            font-family:Arial, sans-serif;
+            background:#0f172a;
+            color:white;
         }
 
-        form {
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 10px;
+        /* 📦 APP LAYOUT */
+
+        .app-layout{
+            display:flex;
+            min-height:100vh;
         }
 
-        input, select {
-            width: 100%;
-            padding: 10px;
-            margin: 5px 0;
-            border-radius: 5px;
-            border: none;
-            box-sizing: border-box;
+        /* 🌌 SIDEBAR */
+
+        .sidebar{
+            width:260px;
+            background:#111827;
+            border-right:1px solid #1f2937;
+            padding:25px 20px;
+            position:sticky;
+            top:0;
+            height:100vh;
         }
 
-        button {
-            width: 100%;
-            padding: 10px;
-            background: #22c55e;
-            border: none;
-            color: white;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
+        .sidebar-logo{
+            font-size:28px;
+            font-weight:bold;
+            color:#22c55e;
+            margin-bottom:40px;
         }
 
-        button:hover {
-            opacity: 0.9;
+        .sidebar-menu{
+            display:flex;
+            flex-direction:column;
+            gap:12px;
+            scrollbar-width:none;
         }
 
-        .danger {
-            background: red;
+        .sidebar-link{
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding:14px 16px;
+            border-radius:14px;
+            text-decoration:none;
+            color:#cbd5e1;
+            transition:0.3s;
+            font-weight:500;
         }
 
-        .archive-btn {
-            background: blue;
+        .sidebar-link:hover{
+            background:#1e293b;
+            color:white;
+            transform:translateX(4px);
         }
 
-        .logout-btn {
-            background: #ef4444;
-            margin-bottom: 10px;
+        .sidebar-link.active{
+            background:#22c55e;
+            color:white;
         }
 
-        .summary, .chart-container, .card {
-            background: #1e293b;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 10px;
+        /* 📱 MAIN CONTENT */
+
+        .main-content{
+            flex:1;
+            overflow-x:hidden;
         }
 
-        .progress-bar {
-            background: #334155;
-            border-radius: 10px;
-            overflow: hidden;
-            height: 12px;
-            margin-top: 5px;
+        /* 🌌 NAVBAR */
+
+        .navbar{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:20px 30px;
+            background:#111827;
+            border-bottom:1px solid #1f2937;
+            position:sticky;
+            top:0;
+            z-index:1000;
         }
 
-        .progress-fill {
-            height: 100%;
-            background: #22c55e;
-            width: {{ savings_goal.progress }}%;
+        .logo{
+            font-size:24px;
+            font-weight:bold;
+            color:#22c55e;
         }
 
-        .chat-user {
-            background: #22c55e;
-            padding: 8px;
-            border-radius: 10px;
-            margin: 5px;
-            text-align: right;
+        .nav-right{
+            display:flex;
+            align-items:center;
+            gap:15px;
+        }
+        /* 🔔 NOTIFICATIONS */
+
+        .notification-wrapper{
+            position:relative;
         }
 
-        .chat-ai {
-            background: #334155;
-            padding: 8px;
-            border-radius: 10px;
-            margin: 5px;
+        .bell-btn{
+            width:auto;
+            background:#1e293b;
+            padding:12px 16px;
+            border-radius:12px;
+            position:relative;
         }
 
-        #chatBox {
-            min-height: 100px;
-            max-height: 200px;
-            overflow-y: auto;
+        .notif-badge{
+            position:absolute;
+            top:-5px;
+            right:-5px;
+            background:#ef4444;
+            color:white;
+            width:22px;
+            height:22px;
+            border-radius:50%;
+            font-size:12px;
+
+            display:flex;
+            align-items:center;
+            justify-content:center;
         }
+
+        .notification-box{
+            display:none;
+
+            position:absolute;
+            right:0;
+            top:60px;
+
+            width:320px;
+
+            background:#111827;
+            border:1px solid #1f2937;
+
+            border-radius:18px;
+
+            padding:18px;
+
+            box-shadow:0 15px 35px rgba(0,0,0,0.4);
+
+            z-index:999;
+        }
+
+        .notification-item{
+            padding:12px;
+            border-bottom:1px solid #1f2937;
+            color:#e2e8f0;
+        }
+
+        .welcome-text{
+            color:#cbd5e1;
+            font-size:14px;
+        }
+
+        .logout-btn{
+            background:#ef4444;
+            color:white;
+            border:none;
+            padding:10px 18px;
+            border-radius:10px;
+            cursor:pointer;
+            font-weight:bold;
+        }
+
+        .logout-btn:hover{
+            opacity:0.9;
+        }
+
+        .container{
+            max-width:1200px;
+            margin:auto;
+            padding:25px;
+        }
+
+        /* ✅ SUCCESS ALERT */
+
+        .success-alert{
+            background:#16a34a;
+            padding:16px;
+            border-radius:14px;
+            margin-top:20px;
+            color:white;
+            font-weight:bold;
+            box-shadow:0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        /* ⚡ QUICK ACTIONS */
+
+        .quick-actions{
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+            gap:18px;
+            margin-top:30px;
+        }
+
+        .action-card{
+            background:#111827;
+            border:1px solid #1f2937;
+            border-radius:20px;
+            padding:25px;
+            transition:0.3s;
+            cursor:pointer;
+        }
+
+        .action-card:hover{
+            transform:translateY(-4px);
+            box-shadow:0 15px 30px rgba(0,0,0,0.35);
+            border-color:#22c55e;
+        }
+
+        .action-icon{
+            font-size:32px;
+            margin-bottom:15px;
+        }
+
+        .action-title{
+            font-size:18px;
+            font-weight:bold;
+            margin-bottom:8px;
+        }
+
+        .action-desc{
+            color:#94a3b8;
+            font-size:14px;
+        }
+
+        /*==================================*/
+        /* HERO DASHBOARD */
+        /*==================================*/
+
+        .dashboard-hero{
+
+            display:grid;
+
+            grid-template-columns:2fr 1fr;
+
+            gap:30px;
+
+            margin-bottom:35px;
+
+        }
+
+        .hero-left{
+
+            display:flex;
+
+            flex-direction:column;
+
+        }
+
+        .welcome-title{
+
+            color:#94a3b8;
+
+            font-size:18px;
+
+        }
+
+        .username{
+
+            font-size:42px;
+
+            margin-top:5px;
+
+            font-weight:bold;
+
+        }
+
+        .hero-subtitle{
+
+            color:#94a3b8;
+
+            margin-top:8px;
+
+            margin-bottom:25px;
+
+        }
+
+        .balance-card{
+
+            background:linear-gradient(
+                135deg,
+                #22c55e,
+                #15803d
+            );
+
+            padding:35px;
+
+            border-radius:28px;
+
+            box-shadow:0 25px 45px rgba(0,0,0,.35);
+
+        }
+
+        .balance-label{
+
+            color:#dcfce7;
+
+            font-size:15px;
+
+        }
+
+        .balance-amount{
+
+            font-size:50px;
+
+            margin-top:15px;
+
+            font-weight:bold;
+
+        }
+
+        .balance-change{
+
+            margin-top:25px;
+
+            display:inline-block;
+
+            background:rgba(255,255,255,.15);
+
+            padding:12px 18px;
+
+            border-radius:15px;
+
+        }
+
+        .hero-right{
+
+            display:flex;
+
+            flex-direction:column;
+
+            gap:20px;
+
+        }
+
+        .hero-action{
+
+            display:flex;
+
+            align-items:center;
+
+            gap:20px;
+
+            background:#111827;
+
+            border:1px solid #1f2937;
+
+            border-radius:22px;
+
+            padding:25px;
+
+            transition:.3s;
+
+        }
+
+        .hero-action:hover{
+
+            transform:translateY(-4px);
+
+            border-color:#22c55e;
+
+            box-shadow:0 15px 35px rgba(0,0,0,.35);
+
+        }
+
+        .hero-icon{
+
+            width:65px;
+
+            height:65px;
+
+            display:flex;
+
+            justify-content:center;
+
+            align-items:center;
+
+            font-size:30px;
+
+            border-radius:18px;
+
+            background:#1e293b;
+
+        }
+
+        /*==================================*/
+        /* DASHBOARD ACTIONS */
+        /*==================================*/
+
+        .dashboard-actions{
+
+            display:grid;
+
+            grid-template-columns:repeat(4,1fr);
+
+            gap:18px;
+
+            margin-bottom:35px;
+
+        }
+
+        .dashboard-btn{
+
+            background:#111827;
+
+            border:1px solid #1f2937;
+
+            color:white;
+
+            text-decoration:none;
+
+            text-align:center;
+
+            padding:18px;
+
+            border-radius:18px;
+
+            font-weight:bold;
+
+            transition:.3s;
+
+        }
+
+        .dashboard-btn:hover{
+
+            background:#22c55e;
+
+            transform:translateY(-4px);
+
+            box-shadow:0 15px 30px rgba(0,0,0,.3);
+
+        }
+
+        /* 📊 ANALYTICS */
+
+        .analytics-grid{
+            display:grid;
+            grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+            gap:20px;
+            margin-top:30px;
+        }
+
+        .analytics-card{
+
+            background:#111827;
+
+            border:1px solid #1f2937;
+
+            border-radius:24px;
+
+            padding:30px;
+
+            transition:.35s;
+
+            position:relative;
+
+            overflow:hidden;
+
+        }
+
+        .analytics-card::before{
+
+            content:"";
+
+            position:absolute;
+
+            left:0;
+
+            top:0;
+
+            width:100%;
+
+            height:5px;
+
+            background:#22c55e;
+
+        }
+
+        .analytics-card:hover{
+
+            transform:translateY(-6px);
+
+            border-color:#22c55e;
+
+            box-shadow:0 20px 45px rgba(0,0,0,.35);
+
+        }
+
+        .analytics-title{
+            color:#94a3b8;
+            font-size:14px;
+            margin-bottom:10px;
+        }
+
+        .analytics-value{
+            font-size:32px;
+            font-weight:bold;
+        }
+
+        .green{
+            color:#22c55e;
+        }
+
+        .red{
+            color:#ef4444;
+        }
+
+        .blue{
+            color:#38bdf8;
+        }
+
+        /* 📦 GENERAL CARDS */
+
+        .summary,
+        .chart-container,
+        .form-card,
+        .chat-section{
+            background:#111827;
+            border:1px solid #1f2937;
+            padding:25px;
+            border-radius:22px;
+            margin-top:25px;
+        }
+
+        .summary{
+
+            background:#111827;
+
+            border:1px solid #1f2937;
+
+            border-radius:25px;
+
+            padding:30px;
+
+            margin-top:35px;
+
+            box-shadow:0 15px 35px rgba(0,0,0,.18);
+
+        }
+
+        /* 📈 CHART */
+
+        .chart-container{
+            height:420px;
+        }
+
+        /* 🎯 PROGRESS BAR */
+
+        .progress-bar{
+            background:#1e293b;
+            height:14px;
+            border-radius:20px;
+            overflow:hidden;
+            margin-top:15px;
+        }
+
+        .progress-fill{
+            height:100%;
+            width:{{ savings_goal.progress }}%;
+            background:linear-gradient(90deg,#22c55e,#16a34a);
+        }
+
+        /* 📝 FORMS */
+
+        form{
+            margin-top:15px;
+        }
+
+        input,
+        select{
+            width:100%;
+            padding:14px;
+            margin-top:10px;
+            border:none;
+            border-radius:12px;
+            background:#1e293b;
+            color:white;
+            font-size:15px;
+        }
+
+        input:focus,
+        select:focus{
+            outline:none;
+            border:1px solid #22c55e;
+        }
+
+        button{
+            width:100%;
+            padding:14px;
+            margin-top:15px;
+            border:none;
+            border-radius:12px;
+            background:#22c55e;
+            color:white;
+            font-weight:bold;
+            cursor:pointer;
+            transition:0.3s;
+        }
+
+        button:hover{
+            transform:translateY(-2px);
+            opacity:0.95;
+        }
+
+        .danger{
+            background:#ef4444;
+        }
+        /* ========================= */
+        /* ⚠️ CLEAR DATA MODAL */
+        /* ========================= */
+
+        .clear-modal{
+
+            display:none;
+
+            position:fixed;
+
+            inset:0;
+
+            background:rgba(0,0,0,0.75);
+
+            backdrop-filter:blur(6px);
+
+            align-items:center;
+            justify-content:center;
+
+            padding:20px;
+
+            z-index:9999;
+
+        }
+
+        .clear-modal.show{
+
+            display:flex;
+
+        }
+
+        .clear-modal-content{
+
+            width:100%;
+            max-width:480px;
+
+            background:#111827;
+
+            border:1px solid #374151;
+
+            border-radius:24px;
+
+            padding:30px;
+
+            box-shadow:
+                0 25px 60px rgba(0,0,0,0.55);
+
+            animation:clearModalIn 0.2s ease-out;
+
+        }
+
+        .clear-modal-icon{
+
+            width:60px;
+            height:60px;
+
+            display:flex;
+            align-items:center;
+            justify-content:center;
+
+            background:#450a0a;
+
+            border:1px solid #7f1d1d;
+
+            border-radius:18px;
+
+            font-size:28px;
+
+            margin-bottom:20px;
+
+        }
+
+        .clear-modal-content h2{
+
+            font-size:24px;
+
+            margin-bottom:12px;
+
+        }
+
+        .clear-modal-content p{
+
+            color:#cbd5e1;
+
+            line-height:1.6;
+
+        }
+
+        .clear-modal-content ul{
+
+            margin:18px 0;
+
+            padding-left:20px;
+
+            color:#cbd5e1;
+
+            line-height:2;
+
+        }
+
+        .clear-warning{
+
+            background:#451a03;
+
+            border:1px solid #92400e;
+
+            color:#fed7aa !important;
+
+            padding:12px 15px;
+
+            border-radius:12px;
+
+            font-size:14px;
+
+        }
+
+        .clear-modal-actions{
+
+            display:flex;
+
+            gap:12px;
+
+            margin-top:25px;
+
+        }
+
+        .clear-modal-actions button{
+
+            flex:1;
+
+            margin-top:0;
+
+        }
+
+        .cancel-clear{
+
+            background:#1e293b;
+
+            color:#e2e8f0;
+
+            border:1px solid #334155;
+
+        }
+
+        .cancel-clear:hover{
+
+            background:#334155;
+
+        }
+
+        .confirm-clear{
+
+            background:#dc2626;
+
+            color:white;
+
+        }
+
+        .confirm-clear:hover{
+
+            background:#b91c1c;
+
+        }
+
+        @keyframes clearModalIn{
+
+            from{
+
+                opacity:0;
+
+                transform:scale(0.96) translateY(10px);
+
+            }
+
+            to{
+
+                opacity:1;
+
+                transform:scale(1) translateY(0);
+
+            }
+
+        }
+
+        @media(max-width:600px){
+
+            .clear-modal-content{
+
+                padding:22px;
+
+            }
+
+            .clear-modal-actions{
+
+                flex-direction:column;
+
+            }
+
+        }
+
+        .archive-btn{
+            background:#2563eb;
+            color:white;
+            padding:14px;
+            border-radius:12px;
+            text-decoration:none;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            font-weight:bold;
+            margin-top:15px;
+            transition:0.3s;
+        }
+
+        .archive-btn:hover{
+            transform:translateY(-2px);
+            opacity:0.95;
+        }
+        
+        /* 🔍 FILTER BAR */
+
+        .filter-bar{
+            background:#111827;
+            border:1px solid #1f2937;
+            padding:20px;
+            border-radius:18px;
+            margin-bottom:20px;
+        }
+
+        .filter-bar form{
+            display:grid;
+            grid-template-columns:1fr 2fr auto;
+            gap:15px;
+            align-items:center;
+        }
+
+        .filter-bar button{
+            margin-top:0;
+            padding:14px 24px;
+        }
+
+        @media(max-width:768px){
+
+            .filter-bar form{
+                grid-template-columns:1fr;
+            }
+
+        }
+
+        /* 📜 TRANSACTIONS */
+
+        .transactions-section{
+            margin-top:35px;
+        }
+
+        .section-header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            margin-bottom:20px;
+        }
+
+        .section-header span{
+            color:#94a3b8;
+        }
+
+        /*==================================*/
+        /* TRANSACTIONS */
+        /*==================================*/
+
+        .transactions-section{
+
+            margin-top:45px;
+
+        }
+
+        .transaction-card{
+
+            display:flex;
+
+            justify-content:space-between;
+
+            align-items:center;
+
+            background:#111827;
+
+            border:1px solid #1f2937;
+
+            border-radius:22px;
+
+            padding:22px;
+
+            margin-bottom:18px;
+
+            transition:.35s;
+
+        }
+
+        .transaction-card:hover{
+
+            transform:translateY(-5px);
+
+            border-color:#22c55e;
+
+            box-shadow:0 18px 35px rgba(0,0,0,.35);
+
+        }
+
+        .transaction-left{
+
+            display:flex;
+
+            align-items:center;
+
+            gap:18px;
+
+        }
+
+        .transaction-icon{
+
+            width:65px;
+
+            height:65px;
+
+            border-radius:20px;
+
+            display:flex;
+
+            justify-content:center;
+
+            align-items:center;
+
+            font-size:28px;
+
+            background:#1e293b;
+
+        }
+
+        .transaction-title{
+
+            font-size:18px;
+
+            font-weight:bold;
+
+        }
+
+        .transaction-desc{
+
+            margin-top:5px;
+
+            color:#94a3b8;
+
+        }
+
+        .transaction-date{
+
+            margin-top:8px;
+
+            color:#64748b;
+
+            font-size:13px;
+
+        }
+
+        .transaction-right{
+
+            text-align:right;
+
+        }
+
+        .amount{
+
+            font-size:24px;
+
+            font-weight:bold;
+
+        }
+
+        .converted{
+
+            display:block;
+
+            margin-top:6px;
+
+            color:#94a3b8;
+
+        }
+
+        .income-text{
+
+            color:#22c55e;
+
+        }
+
+        .expense-text{
+
+            color:#ef4444;
+
+        }
+
+        .delete-btn{
+
+            background:#ef4444;
+
+            border:none;
+
+            color:white;
+
+            padding:10px 18px;
+
+            border-radius:12px;
+
+            cursor:pointer;
+
+            transition:.3s;
+
+        }
+
+        .delete-btn:hover{
+
+            background:#dc2626;
+
+        }
+
+        .empty-state{
+
+            background:#111827;
+
+            border:2px dashed #334155;
+
+            border-radius:24px;
+
+            padding:60px;
+
+            text-align:center;
+
+            color:#94a3b8;
+
+        }
+        /* 📄 PAGINATION */
+
+        .pagination{
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            gap:12px;
+            margin-top:30px;
+            flex-wrap:wrap;
+        }
+
+        .pagination a{
+            padding:12px 18px;
+            background:#111827;
+            border:1px solid #1f2937;
+            border-radius:12px;
+            text-decoration:none;
+            color:white;
+            transition:0.3s;
+            font-weight:bold;
+        }
+
+        .pagination a:hover{
+            background:#22c55e;
+            transform:translateY(-2px);
+        }
+
+        .pagination .active-page{
+            background:#22c55e;
+            border-color:#22c55e;
+        }
+
+        /* 🤖 CHAT */
+
+        #chatBox{
+            min-height:120px;
+            max-height:250px;
+            overflow-y:auto;
+            margin-bottom:15px;
+        }
+
+        .chat-user{
+            background:#22c55e;
+            padding:10px;
+            border-radius:10px;
+            margin:8px 0;
+            text-align:right;
+        }
+
+        .chat-ai{
+            background:#1e293b;
+            padding:10px;
+            border-radius:10px;
+            margin:8px 0;
+        }
+
+        /*================================*/
+        /* QUICK ACTIONS */
+        /*================================*/
+
+        .action-grid{
+
+            display:grid;
+
+            grid-template-columns:repeat(4,1fr);
+
+            gap:20px;
+
+            margin-bottom:40px;
+
+        }
+
+        .action-box{
+
+            text-decoration:none;
+
+            background:#111827;
+
+            border:1px solid #1f2937;
+
+            border-radius:22px;
+
+            padding:30px;
+
+            color:white;
+
+            transition:.30s;
+
+        }
+
+        .action-box:hover{
+
+            transform:translateY(-8px);
+
+            border-color:#22c55e;
+
+            box-shadow:0 18px 40px rgba(0,0,0,.35);
+
+        }
+
+        .action-emoji{
+
+            font-size:42px;
+
+            margin-bottom:18px;
+
+        }
+
+        .action-box h3{
+
+            margin-bottom:10px;
+
+        }
+
+        .action-box p{
+
+            color:#94a3b8;
+
+            font-size:14px;
+
+        }
+
+        /*================================*/
+        /* FINANCIAL OVERVIEW */
+        /*================================*/
+
+        .overview-grid{
+
+            display:grid;
+
+            grid-template-columns:repeat(4,1fr);
+
+            gap:20px;
+
+            margin-bottom:35px;
+
+        }
+
+        .overview-card{
+
+            background:linear-gradient(
+                145deg,
+                #111827,
+                #1e293b
+            );
+
+            border:1px solid #1f2937;
+
+            border-radius:24px;
+
+            padding:28px;
+
+            transition:.35s;
+
+            position:relative;
+
+            overflow:hidden;
+
+        }
+
+        .overview-card::before{
+
+            content:"";
+
+            position:absolute;
+
+            left:0;
+
+            top:0;
+
+            width:6px;
+
+            height:100%;
+
+            background:#22c55e;
+
+        }
+
+        .overview-card:hover{
+
+            transform:translateY(-8px);
+
+            box-shadow:0 20px 40px rgba(0,0,0,.35);
+
+        }
+
+        .overview-icon{
+
+            font-size:40px;
+
+        }
+
+        .overview-card p{
+
+            margin-top:18px;
+
+            color:#94a3b8;
+
+            font-size:15px;
+
+        }
+
+        .overview-card h2{
+
+            margin-top:12px;
+
+            font-size:34px;
+
+            font-weight:bold;
+
+        }
+
+        /* 📱 MOBILE */
+
+        @media(max-width:768px){
+
+            .dashboard-hero{
+
+                grid-template-columns:1fr;
+
+            }
+
+            .dashboard-actions{
+
+                grid-template-columns:1fr 1fr;
+
+            }
+
+            .username{
+
+                font-size:32px;
+
+            }
+
+            .balance-amount{
+
+                font-size:36px;
+
+            }
+
+            .app-layout{
+                flex-direction:column;
+            }
+
+            .sidebar{
+                width:100%;
+                height:auto;
+                position:relative;
+                padding:15px;
+            }
+
+            .sidebar-logo{
+                margin-bottom:20px;
+            }
+
+            .sidebar-menu{
+                flex-direction:row;
+                overflow-x:auto;
+                padding-bottom:10px;
+            }
+
+            .sidebar-link{
+                min-width:max-content;
+            }
+
+            .main-content{
+                width:100%;
+            }
+
+            .navbar{
+                padding:15px;
+            }
+
+            .hero-top{
+                flex-direction:column;
+                align-items:flex-start;
+                gap:20px;
+            }
+
+            .hero-balance{
+                font-size:34px;
+            }
+
+            .hero-stats{
+                flex-direction:column;
+            }
+
+            .container{
+                padding:15px;
+            }
+
+            .transaction-card{
+
+                flex-direction:column;
+
+                align-items:flex-start;
+
+                gap:18px;
+
+            }
+
+            .transaction-right{
+
+                width:100%;
+
+                text-align:left;
+
+            }
+
+            .action-grid{
+
+                grid-template-columns:1fr 1fr;
+
+            }
+
+        }
+        /* =========================================================
+        💳 FINFLOW PROFESSIONAL HERO
+        ========================================================= */
+
+        .dashboard-hero{
+
+            position:relative;
+
+            overflow:hidden;
+
+            margin-top:25px;
+            margin-bottom:25px;
+
+            padding:32px;
+
+            border-radius:24px;
+
+            background:
+                radial-gradient(
+                    circle at 90% 10%,
+                    rgba(255,255,255,0.14),
+                    transparent 35%
+                ),
+                linear-gradient(
+                    135deg,
+                    #16a34a 0%,
+                    #22c55e 55%,
+                    #15803d 100%
+                );
+
+            border:1px solid rgba(255,255,255,0.12);
+
+            box-shadow:
+                0 20px 45px rgba(0,0,0,0.30);
+
+        }
+
+
+        /* Decorative background circle */
+
+        .dashboard-hero::after{
+
+            content:"";
+
+            position:absolute;
+
+            width:220px;
+            height:220px;
+
+            right:-80px;
+            top:-90px;
+
+            border-radius:50%;
+
+            background:rgba(255,255,255,0.08);
+
+            pointer-events:none;
+
+        }
+
+
+        /* Top section */
+
+        .hero-header{
+
+            position:relative;
+
+            z-index:2;
+
+            display:flex;
+
+            justify-content:space-between;
+
+            align-items:flex-start;
+
+            gap:20px;
+
+        }
+
+
+        /* Greeting */
+
+        .hero-greeting{
+
+            color:#dcfce7;
+
+            font-size:14px;
+
+            font-weight:600;
+
+            margin-bottom:7px;
+
+        }
+
+
+        .hero-name{
+
+            font-size:30px;
+
+            font-weight:700;
+
+            line-height:1.2;
+
+        }
+
+
+        .hero-description{
+
+            margin-top:8px;
+
+            color:#dcfce7;
+
+            font-size:14px;
+
+            opacity:.9;
+
+        }
+
+
+        /* Wallet icon */
+
+        .hero-wallet-icon{
+
+            width:58px;
+            height:58px;
+
+            border-radius:18px;
+
+            display:flex;
+
+            align-items:center;
+            justify-content:center;
+
+            background:rgba(255,255,255,0.14);
+
+            border:1px solid rgba(255,255,255,0.18);
+
+            font-size:28px;
+
+            backdrop-filter:blur(10px);
+
+        }
+
+
+        /* Balance area */
+
+        .hero-balance-section{
+
+            position:relative;
+
+            z-index:2;
+
+            margin-top:30px;
+
+        }
+
+
+        .hero-balance-label{
+
+            color:#dcfce7;
+
+            font-size:13px;
+
+            font-weight:600;
+
+            text-transform:uppercase;
+
+            letter-spacing:.6px;
+
+        }
+
+
+        .hero-balance{
+
+            margin-top:8px;
+
+            font-size:46px;
+
+            font-weight:800;
+
+            letter-spacing:-1px;
+
+        }
+
+
+        .hero-updated{
+
+            margin-top:8px;
+
+            color:#dcfce7;
+
+            font-size:12px;
+
+            opacity:.85;
+
+        }
+
+
+        /* Income / Expense cards */
+
+        .hero-financial-stats{
+
+            position:relative;
+
+            z-index:2;
+
+            display:grid;
+
+            grid-template-columns:1fr 1fr;
+
+            gap:15px;
+
+            margin-top:28px;
+
+        }
+
+
+        .hero-stat{
+
+            padding:18px;
+
+            border-radius:17px;
+
+            background:rgba(255,255,255,0.12);
+
+            border:1px solid rgba(255,255,255,0.12);
+
+            backdrop-filter:blur(10px);
+
+        }
+
+
+        .hero-stat-label{
+
+            display:flex;
+
+            align-items:center;
+
+            gap:7px;
+
+            color:#dcfce7;
+
+            font-size:13px;
+
+        }
+
+
+        .hero-stat-value{
+
+            margin-top:7px;
+
+            font-size:21px;
+
+            font-weight:700;
+
+        }
+
+
+        .hero-stat-income{
+
+            color:#dcfce7;
+
+        }
+
+
+        .hero-stat-expense{
+
+            color:#fee2e2;
+
+        }
+
+
+        /* Responsive */
+
+        @media(max-width:768px){
+
+            .dashboard-hero{
+
+                padding:24px;
+
+                border-radius:20px;
+
+            }
+
+
+            .hero-header{
+
+                align-items:flex-start;
+
+            }
+
+
+            .hero-name{
+
+                font-size:25px;
+
+            }
+
+
+            .hero-balance{
+
+                font-size:36px;
+
+            }
+
+
+            .hero-financial-stats{
+
+                grid-template-columns:1fr;
+
+            }
+
+
+            .hero-wallet-icon{
+
+                width:50px;
+                height:50px;
+
+                font-size:23px;
+
+            }
+
+        }
+        /* ========================================================= */
+        /* ⭐ PROFESSIONAL DASHBOARD HERO */
+        /* ========================================================= */
+
+        .dashboard-hero{
+            margin-top:25px;
+            padding:30px;
+            border-radius:28px;
+
+            background:
+                radial-gradient(
+                    circle at top right,
+                    rgba(34,197,94,0.16),
+                    transparent 35%
+                ),
+                linear-gradient(
+                    135deg,
+                    #111827,
+                    #0f172a
+                );
+
+            border:1px solid #1f2937;
+
+            box-shadow:
+                0 20px 45px rgba(0,0,0,0.30);
+
+            overflow:hidden;
+        }
+
+
+        /* HERO HEADER */
+
+        .hero-header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:30px;
+        }
+
+
+        .hero-welcome{
+            min-width:0;
+        }
+
+
+        .welcome-badge{
+            display:inline-flex;
+            align-items:center;
+
+            padding:7px 12px;
+
+            border-radius:999px;
+
+            background:rgba(34,197,94,0.10);
+
+            border:1px solid rgba(34,197,94,0.25);
+
+            color:#86efac;
+
+            font-size:12px;
+            font-weight:bold;
+
+            letter-spacing:0.3px;
+
+            margin-bottom:15px;
+        }
+
+
+        .welcome-title{
+            color:#94a3b8;
+
+            font-size:16px;
+
+            margin-bottom:4px;
+        }
+
+
+        .username{
+            font-size:36px;
+
+            line-height:1.1;
+
+            font-weight:800;
+
+            color:white;
+        }
+
+
+        .hero-subtitle{
+            color:#64748b;
+
+            margin-top:10px;
+
+            font-size:15px;
+        }
+
+
+        /* ========================================================= */
+        /* ⭐ FINANCIAL SCORE */
+        /* ========================================================= */
+
+        .hero-score{
+            min-width:130px;
+
+            display:flex;
+            flex-direction:column;
+
+            align-items:center;
+
+            justify-content:center;
+
+            padding:18px;
+
+            border-radius:20px;
+
+            background:rgba(30,41,59,0.65);
+
+            border:1px solid #334155;
+
+            backdrop-filter:blur(10px);
+        }
+
+
+        .score-label{
+            color:#94a3b8;
+
+            font-size:12px;
+
+            font-weight:bold;
+
+            margin-bottom:10px;
+        }
+
+
+        .score-circle{
+            width:72px;
+            height:72px;
+
+            border-radius:50%;
+
+            display:flex;
+            align-items:center;
+            justify-content:center;
+
+            background:
+                conic-gradient(
+                    #22c55e calc({{ score }} * 1%),
+                    #1e293b calc({{ score }} * 1%)
+                );
+
+            position:relative;
+        }
+
+
+        .score-circle::before{
+            content:"";
+
+            position:absolute;
+
+            width:56px;
+            height:56px;
+
+            border-radius:50%;
+
+            background:#111827;
+        }
+
+
+        .score-circle span{
+            position:relative;
+
+            z-index:1;
+
+            font-size:20px;
+
+            font-weight:800;
+
+            color:white;
+        }
+
+
+        .hero-score small{
+            color:#64748b;
+
+            margin-top:8px;
+
+            font-size:11px;
+        }
+
+
+        /* ========================================================= */
+        /* ⭐ MAIN BALANCE CARD */
+        /* ========================================================= */
+
+        .hero-balance-card{
+            margin-top:25px;
+
+            padding:28px;
+
+            border-radius:22px;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    rgba(34,197,94,0.18),
+                    rgba(22,163,74,0.06)
+                );
+
+            border:1px solid rgba(34,197,94,0.20);
+
+            display:flex;
+
+            justify-content:space-between;
+
+            align-items:center;
+        }
+
+
+        .balance-info{
+            min-width:0;
+        }
+
+
+        .balance-label{
+            color:#94a3b8;
+
+            font-size:14px;
+
+            font-weight:600;
+        }
+
+
+        .balance-amount{
+            margin-top:8px;
+
+            font-size:38px;
+
+            font-weight:800;
+
+            color:white;
+
+            letter-spacing:-1px;
+        }
+
+
+        .balance-description{
+            margin-top:7px;
+
+            color:#64748b;
+
+            font-size:13px;
+        }
+
+
+        .balance-icon{
+            width:64px;
+            height:64px;
+
+            border-radius:18px;
+
+            display:flex;
+            align-items:center;
+            justify-content:center;
+
+            font-size:32px;
+
+            background:rgba(34,197,94,0.12);
+
+            border:1px solid rgba(34,197,94,0.20);
+
+            flex-shrink:0;
+        }
+
+
+        /* ========================================================= */
+        /* ⭐ INCOME / EXPENSES */
+        /* ========================================================= */
+
+        .hero-stats{
+            display:grid;
+
+            grid-template-columns:
+                repeat(2, minmax(0,1fr));
+
+            gap:18px;
+
+            margin-top:18px;
+        }
+
+
+        .hero-stat{
+            display:flex;
+
+            align-items:center;
+
+            gap:15px;
+
+            padding:20px;
+
+            border-radius:20px;
+
+            background:#111827;
+
+            border:1px solid #1f2937;
+
+            transition:
+                transform 0.25s ease,
+                border-color 0.25s ease,
+                box-shadow 0.25s ease;
+        }
+
+
+        .hero-stat:hover{
+            transform:translateY(-3px);
+
+            border-color:#334155;
+
+            box-shadow:
+                0 12px 25px rgba(0,0,0,0.25);
+        }
+
+
+        .hero-stat-icon{
+            width:48px;
+            height:48px;
+
+            display:flex;
+            align-items:center;
+            justify-content:center;
+
+            border-radius:14px;
+
+            font-size:23px;
+
+            background:#1e293b;
+
+            flex-shrink:0;
+        }
+
+
+        .hero-stat-info{
+            display:flex;
+
+            flex-direction:column;
+
+            gap:5px;
+        }
+
+
+        .hero-stat-info span{
+            color:#94a3b8;
+
+            font-size:13px;
+        }
+
+
+        .hero-stat-info strong{
+            font-size:20px;
+        }
+
+
+        /* ========================================================= */
+        /* ⭐ COLORS */
+        /* ========================================================= */
+
+        .green{
+            color:#22c55e;
+        }
+
+
+        .red{
+            color:#ef4444;
+        }
+
+
+        /* ========================================================= */
+        /* 📱 HERO MOBILE */
+        /* ========================================================= */
+
+        @media(max-width:768px){
+
+            .dashboard-hero{
+                padding:22px;
+
+                border-radius:22px;
+            }
+
+
+            .hero-header{
+                flex-direction:column;
+
+                align-items:flex-start;
+
+                gap:20px;
+            }
+
+
+            .hero-score{
+                width:100%;
+
+                flex-direction:row;
+
+                gap:15px;
+
+                justify-content:flex-start;
+            }
+
+
+            .score-label{
+                margin-bottom:0;
+            }
+
+
+            .hero-score small{
+                margin-top:0;
+            }
+
+
+            .username{
+                font-size:30px;
+            }
+
+
+            .hero-balance-card{
+                padding:22px;
+            }
+
+
+            .balance-amount{
+                font-size:30px;
+            }
+
+
+            .hero-stats{
+                grid-template-columns:1fr;
+            }
+
+        }
+
+
+        /* ========================================================= */
+        /* 📱 SMALL PHONES */
+        /* ========================================================= */
+
+        @media(max-width:480px){
+
+            .dashboard-hero{
+                padding:18px;
+            }
+
+
+            .username{
+                font-size:26px;
+            }
+
+
+            .hero-subtitle{
+                font-size:14px;
+            }
+
+
+            .hero-balance-card{
+                padding:18px;
+            }
+
+
+            .balance-amount{
+                font-size:26px;
+            }
+
+
+            .balance-icon{
+                width:52px;
+                height:52px;
+
+                font-size:26px;
+            }
+
+
+            .hero-stat{
+                padding:16px;
+            }
+
+
+            .hero-stat-info strong{
+                font-size:17px;
+            }
+
+        }
+
     </style>
 </head>
 
 <body>
 
-<div class="container">
+<div class="app-layout">
 
-    <!-- 🔴 LOGOUT BUTTON -->
-    <a href="/logout">
-        <button type="button" class="logout-btn">🚪 Logout</button>
-    </a>
+    <!-- 🌌 SIDEBAR -->
 
-    <h1>💰 Smart Finance Tracker</h1>
+    <div class="sidebar">
 
-    {% if success == "mpesa" %}
-        <div style="background: green; padding:10px; border-radius:8px; margin-bottom:10px;">
-            ✅ M-Pesa payment successful!
+        <div class="sidebar-logo">
+            💰 FinFlow
         </div>
+
+        <div class="sidebar-menu">
+
+            <a href="/" class="sidebar-link active">
+                🏠 Dashboard
+            </a>
+
+            <a href="/transactions" class="sidebar-link">
+                📜 Transactions
+            </a>
+
+            <a href="/analytics" class="sidebar-link">
+                📊 Analytics
+            </a>
+
+            <a href="/wallet" class="sidebar-link">
+                💳 Wallet
+            </a>
+
+            <a href="/ai-assistant" class="sidebar-link">
+                🤖 AI Assistant
+            </a>
+
+            <a href="/settings" class="sidebar-link">
+                ⚙️ Settings
+            </a>
+
+            <a href="/logout" class="sidebar-link">
+                🚪 Logout
+            </a>
+
+        </div>
+
+    </div>
+
+    <!-- 📦 MAIN CONTENT -->
+
+    <div class="main-content">
+        <!-- 🌌 NAVBAR -->
+
+        <div class="navbar">
+
+            <div class="logo">
+                💰 FinFlow
+            </div>
+
+            <div class="nav-right">
+                <div class="notification-wrapper">
+
+                    <button class="bell-btn"
+                            onclick="toggleNotifications()">
+
+                        🔔
+
+                        {% if unread_count > 0 %}
+                            <span class="notif-badge">
+                                {{ unread_count }}
+                            </span>
+                        {% endif %}
+
+                    </button>
+
+                    <div id="notificationBox"
+                        class="notification-box">
+
+                        <h3>Notifications</h3>
+
+                        {% if notifications %}
+
+                            {% for n in notifications %}
+
+                                <div class="notification-item">
+
+                                    {% if not n[2] %}
+                                        🔴
+                                    {% endif %}
+
+                                    {{ n[1] }}
+
+                                </div>
+
+                            {% endfor %}
+
+                        {% else %}
+
+                            <p>No notifications</p>
+
+                        {% endif %}
+
+                    </div>
+
+                </div>
+
+                <span class="welcome-text">
+                    Welcome back 👋
+                </span>
+
+                <a href="/logout">
+                    <button class="logout-btn">
+                        Logout
+                    </button>
+                </a>
+
+            </div>
+
+        </div>
+
+    <div class="container">
+
+    <!-- 🔔 NOTIFICATIONS -->
+
+    {% if request.args.get('success') %}
+
+        <div class="success-alert">
+
+            {% if request.args.get('success') == 'mpesa' %}
+
+                ✅ M-Pesa payment successful!
+
+            {% elif request.args.get('success') == 'sent' %}
+
+                💸 Money sent successfully!
+
+            {% elif request.args.get('success') == 'deleted' %}
+
+                🗑️ Transaction deleted!
+
+            {% elif request.args.get('success') == 'added' %}
+
+                ✅ Transaction added!
+
+            {% elif request.args.get('success') == 'withdraw' %}
+
+                💸 Withdrawal successful!
+
+            {% elif request.args.get('success') == 'converted' %}
+
+                💱 Currency converted successfully!
+
+            {% elif request.args.get('success') == 'cleared' %}
+
+                🧹 All your financial data has been cleared successfully.
+
+            {% elif request.args.get('success') == 'clear_error' %}
+
+                ❌ Something went wrong while clearing your data.
+
+            {% endif %}
+
+        </div>
+
     {% endif %}
 
-    <div class="summary">
-        <p>💰 Income: Ksh {{income}}</p>
-        <p>💸 Expenses: Ksh {{expenses}}</p>
-        <p>⚖️ Balance: Ksh {{balance}}</p>
+    <!-- ========================= -->
+    <!-- ⭐ PROFESSIONAL HERO -->
+    <!-- ========================= -->
+
+    <section class="dashboard-hero">
+
+        <!-- HERO HEADER -->
+
+        <div class="hero-header">
+
+            <div class="hero-welcome">
+
+                <span class="welcome-badge">
+                    ✨ Financial Overview
+                </span>
+
+                <p class="welcome-title">
+                    👋 Welcome back,
+                </p>
+
+                <h1 class="username">
+                    {{ session.username }}
+                </h1>
+
+                <p class="hero-subtitle">
+                    Here's an overview of your finances today.
+                </p>
+
+            </div>
+
+            <div class="hero-score">
+
+                <span class="score-label">
+                    Financial Score
+                </span>
+
+                <div class="score-circle">
+
+                    <span>
+                        {{ score }}
+                    </span>
+
+                </div>
+
+                <small>
+                    out of 100
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <!-- MAIN BALANCE -->
+
+        <div class="hero-balance-card">
+
+            <div class="balance-info">
+
+                <span class="balance-label">
+                    Total Balance
+                </span>
+
+                <h2 class="balance-amount">
+                    KES {{ "{:,.2f}".format(balance) }}
+                </h2>
+
+                <p class="balance-description">
+                    Your current financial position
+                </p>
+
+            </div>
+
+            <div class="balance-icon">
+                💳
+            </div>
+
+        </div>
+
+
+        <!-- INCOME / EXPENSES -->
+
+        <div class="hero-stats">
+
+            <!-- INCOME -->
+
+            <div class="hero-stat income-stat">
+
+                <div class="hero-stat-icon">
+                    💰
+                </div>
+
+                <div class="hero-stat-info">
+
+                    <span>
+                        Total Income
+                    </span>
+
+                    <strong class="green">
+                        KES {{ "{:,.2f}".format(income) }}
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <!-- EXPENSES -->
+
+            <div class="hero-stat expense-stat">
+
+                <div class="hero-stat-icon">
+                    💸
+                </div>
+
+                <div class="hero-stat-info">
+
+                    <span>
+                        Total Expenses
+                    </span>
+
+                    <strong class="red">
+                        KES {{ "{:,.2f}".format(expenses) }}
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- ========================= -->
+    <!-- QUICK ACTIONS -->
+    <!-- ========================= -->
+
+    <div class="dashboard-actions">
+
+        <a href="#add-transaction" class="dashboard-btn">
+            ➕ Add Transaction
+        </a>
+
+        <a href="/wallet" class="dashboard-btn">
+            💳 Wallet
+        </a>
+
+        <a href="/analytics" class="dashboard-btn">
+            📊 Analytics
+        </a>
+
+        <a href="/ai-assistant" class="dashboard-btn">
+            🤖 AI Coach
+        </a>
+
     </div>
 
-    <div class="summary">
-        <h3>💯 Financial Score</h3>
-        <h2>{{score}} / 100</h2>
-        <p>{{score_status}}</p>
-    </div>
+    <!-- 💳 MULTI CURRENCY WALLETS -->
 
     <div class="summary">
+
+        <h3>💳 Currency Wallets</h3>
+
+        <div class="analytics-grid">
+
+            {% for currency, amount in wallets.items() %}
+
+            <div class="analytics-card">
+
+                <div class="analytics-title">
+
+                    {% if currency == "USD" %}
+                        🇺🇸 USD Wallet
+
+                    {% elif currency == "KES" %}
+                        🇰🇪 KES Wallet
+
+                    {% elif currency == "EUR" %}
+                        🇪🇺 EUR Wallet
+
+                    {% elif currency == "GBP" %}
+                        🇬🇧 GBP Wallet
+
+                    {% elif currency == "JPY" %}
+                        🇯🇵 JPY Wallet
+
+                    {% elif currency == "CAD" %}
+                        🇨🇦 CAD Wallet
+
+                    {% else %}
+                        🌍 {{ currency }} Wallet
+                    {% endif %}
+
+                </div>
+
+                <div class="analytics-value green">
+
+                    {{ "{:,.2f}".format(amount.balance) }}
+
+                </div>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+    <!-- 📈 LIVE FOREX -->
+
+    <div class="summary">
+
+        <h3>📈 Live Forex Rates</h3>
+
+        <div class="analytics-grid">
+
+            {% for forex in forex_rates %}
+
+            <div class="analytics-card">
+
+                <div class="analytics-title">
+
+                    {% if forex.from == "USD" %}
+                        🇺🇸
+                    {% elif forex.from == "KES" %}
+                        🇰🇪
+                    {% elif forex.from == "EUR" %}
+                        🇪🇺
+                    {% elif forex.from == "GBP" %}
+                        🇬🇧
+                    {% endif %}
+
+                    {{ forex.from }}
+                    →
+
+                    {% if forex.to == "USD" %}
+                        🇺🇸
+                    {% elif forex.to == "KES" %}
+                        🇰🇪
+                    {% elif forex.to == "EUR" %}
+                        🇪🇺
+                    {% elif forex.to == "GBP" %}
+                        🇬🇧
+                    {% endif %}
+
+                    {{ forex.to }}
+
+                </div>
+
+                <div class="analytics-value blue">
+
+                    {{ forex.rate }}
+
+                </div>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+    <!-- 📊 ANALYTICS CARDS -->
+
+    <div class="analytics-grid">
+
+        <div class="analytics-card">
+            <div class="analytics-title">
+                Financial Score
+            </div>
+
+            <div class="analytics-value green">
+                {{ score }}/100
+            </div>
+
+            <p>{{ score_status }}</p>
+        </div>
+
+        <div class="analytics-card">
+            <div class="analytics-title">
+                Savings Progress
+            </div>
+
+            <div class="analytics-value blue">
+                {{ savings_goal.progress }}%
+            </div>
+
+            <p>{{ savings_goal.saved }} / {{ savings_goal.target }}</p>
+        </div>
+
+        <div class="analytics-card">
+            <div class="analytics-title">
+                Total Transactions
+            </div>
+
+            <div class="analytics-value">
+                {{ transactions|length }}
+            </div>
+
+            <p>Recorded activities</p>
+        </div>
+
+    </div>
+
+    <!-- 💰 MULTI-CURRENCY WALLETS -->
+
+    <div class="summary">
+
+        <h3>💰 Currency Wallets</h3>
+
+        <div class="analytics-grid">
+
+            {% for currency, balance in wallets.items() %}
+
+                <div class="analytics-card">
+
+                    <div class="analytics-title">
+                        {{ currency }} Wallet
+                    </div>
+
+                    <div class="analytics-value green">
+                        {{ "{:,.2f}".format(balance.balance) }}
+                    </div>
+
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
+
+    <!-- ================================= -->
+    <!-- QUICK ACTIONS -->
+    <!-- ================================= -->
+
+    <h2 style="margin-top:35px;margin-bottom:20px;">
+        ⚡ Quick Actions
+    </h2>
+
+    <div class="action-grid">
+
+        <a href="#deposit" class="action-box">
+
+            <div class="action-emoji">💸</div>
+
+            <h3>Deposit</h3>
+
+            <p>Add money</p>
+
+        </a>
+
+        <a href="#send" class="action-box">
+
+            <div class="action-emoji">💳</div>
+
+            <h3>Send Money</h3>
+
+            <p>Transfer funds</p>
+
+        </a>
+
+        <a href="#transaction" class="action-box">
+
+            <div class="action-emoji">➕</div>
+
+            <h3>Transaction</h3>
+
+            <p>Add income or expense</p>
+
+        </a>
+
+        <a href="/analytics" class="action-box">
+
+            <div class="action-emoji">📊</div>
+
+            <h3>Analytics</h3>
+
+            <p>View reports</p>
+
+        </a>
+
+        <a href="#converter" class="action-box">
+
+            <div class="action-emoji">💱</div>
+
+            <h3>Convert</h3>
+
+            <p>Currency exchange</p>
+
+        </a>
+
+        <a href="/ai-assistant" class="action-box">
+
+            <div class="action-emoji">🤖</div>
+
+            <h3>AI Coach</h3>
+
+            <p>Financial advice</p>
+
+        </a>
+
+        <a href="/wallet" class="action-box">
+
+            <div class="action-emoji">👛</div>
+
+            <h3>Wallet</h3>
+
+            <p>Manage balances</p>
+
+        </a>
+
+        <a href="/settings" class="action-box">
+
+            <div class="action-emoji">⚙️</div>
+
+            <h3>Settings</h3>
+
+            <p>Preferences</p>
+
+        </a>
+
+    </div>
+
+    <!-- 🎯 SAVINGS -->
+
+    <div class="summary">
+
         <h3>🎯 Savings Goal</h3>
 
-        <p>Saved: Ksh {{savings_goal.saved}}</p>
-        <p>Target: Ksh {{savings_goal.target}}</p>
+        <p>Saved: Ksh {{ savings_goal.saved }}</p>
+
+        <p>Target: Ksh {{ savings_goal.target }}</p>
 
         <div class="progress-bar">
             <div class="progress-fill"></div>
         </div>
 
-        <p>{{savings_goal.progress}}% complete</p>
+        <p style="margin-top:10px;">
+            {{ savings_goal.progress }}% complete
+        </p>
+
     </div>
+
+    <!-- 📈 CHART -->
 
     <div class="chart-container">
+
         <canvas id="myChart"></canvas>
+
     </div>
 
+    <!-- 🤖 AI INSIGHTS -->
+
     <div class="summary">
+
         <h3>🤖 AI Insights</h3>
 
         {% if insights %}
             {% for insight in insights %}
-                <p>{{insight}}</p>
+                <p>{{ insight }}</p>
             {% endfor %}
         {% else %}
             <p>No insights yet.</p>
         {% endif %}
+
     </div>
 
+    <!-- 📊 AI BUDGETING -->
+
     <div class="summary">
+
         <h3>📊 AI Budgeting</h3>
 
         {% for category, data in budget_data.items() %}
+
             <p>
-                <b>{{category}}</b>:
-                Spent Ksh {{data.spent}} /
-                Recommended Ksh {{data.recommended}}
+                <b>{{ category }}</b>:
+                Spent Ksh {{ data.spent }} /
+                Recommended Ksh {{ data.recommended }}
             </p>
+
         {% endfor %}
 
-        <h4>💡 Tips</h4>
+        <h4 style="margin-top:15px;">
+            💡 Tips
+        </h4>
 
         {% for tip in budget_tips %}
-            <p>{{tip}}</p>
+            <p>{{ tip }}</p>
         {% endfor %}
+
     </div>
 
     <!-- 📝 ADD TRANSACTION -->
-    <form method="POST" action="/dashboard">
 
-        <input type="hidden"
-               name="_csrf_token"
-               value="{{ csrf_token() }}">
+    <div class="form-card" id="add-transaction">
 
-        <input
-            type="number"
-            step="0.01"
-            min="1"
-            name="amount"
-            placeholder="Amount"
-            required
-        >
+        <h3>📝 Add Transaction</h3>
 
-        <select name="type">
-            <option value="expense">Expense</option>
-            <option value="income">Income</option>
-        </select>
-
-        <input
-            name="category"
-            placeholder="Category (optional)"
-        >
-
-        <input
-            name="source"
-            placeholder="Source (mpesa, crypto, bank)"
-            required
-        >
-
-        <input
-            name="description"
-            placeholder="Description"
-            required
-        >
-
-        <button type="submit">
-            Add Transaction
-        </button>
-
-    </form>
-
-    <!-- 💳 M-PESA -->
-    <div class="summary">
-
-        <h3>💳 M-Pesa Deposit</h3>
-
-        <form method="POST" action="/mpesa">
+        <form method="POST" action="/dashboard">
 
             <input type="hidden"
                    name="_csrf_token"
                    value="{{ csrf_token() }}">
 
             <input
+                type="number"
+                step="0.01"
+                min="1"
+                name="amount"
+                placeholder="Amount"
+                required
+            >
+
+            <select name="type">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+            </select>
+
+            <select name="currency" required>
+
+                <option value="KES">KES - Kenyan Shilling</option>
+                <option value="USD">USD - US Dollar</option>
+                <option value="EUR">EUR - Euro</option>
+                <option value="GBP">GBP - British Pound</option>
+                <option value="JPY">JPY - Japanese Yen</option>
+                <option value="CNY">CNY - Chinese Yuan</option>
+                <option value="INR">INR - Indian Rupee</option>
+                <option value="AUD">AUD - Australian Dollar</option>
+                <option value="CAD">CAD - Canadian Dollar</option>
+                <option value="CHF">CHF - Swiss Franc</option>
+                <option value="SAR">SAR - Saudi Riyal</option>
+                <option value="AED">AED - UAE Dirham</option>
+                <option value="ZAR">ZAR - South African Rand</option>
+                <option value="NGN">NGN - Nigerian Naira</option>
+                <option value="UGX">UGX - Ugandan Shilling</option>
+                <option value="TZS">TZS - Tanzanian Shilling</option>
+
+            </select>
+
+            <input
+                name="category"
+                placeholder="Category"
+            >
+
+            <input
+                name="source"
+                placeholder="Source"
+                required
+            >
+
+            <input
+                name="description"
+                placeholder="Description"
+                required
+            >
+
+            <button type="submit">
+                Add Transaction
+            </button>
+
+        </form>
+
+    </div>
+
+    <!-- 💳 M-PESA -->
+
+    <div class="form-card" id="deposit">
+
+        <h3>💳 M-Pesa Deposit</h3>
+
+        <form method="POST" action="/mpesa">
+
+            <input type="hidden"
+                name="_csrf_token"
+                value="{{ csrf_token() }}">
+
+            <input
                 name="phone"
-                placeholder="Phone Number (07XXXXXXXX)"
+                placeholder="Phone Number"
                 required
             >
 
@@ -270,39 +2977,298 @@
 
     </div>
 
-    <!-- 🗑️ CLEAR -->
-    <form method="POST" action="/clear">
+    <!-- 💱 CURRENCY CONVERTER -->
 
-        <input type="hidden"
-               name="_csrf_token"
-               value="{{ csrf_token() }}">
+    <div class="form-card" id="converter">
 
-        <button type="submit" class="danger">
-            🗑️ Clear All Data
-        </button>
+        <h3>💱 Convert Currency</h3>
 
-    </form>
+        <form method="POST" action="/convert-currency">
 
-    <a href="/archive">
-        <button type="button" class="archive-btn">
+            <input type="hidden"
+                name="_csrf_token"
+                value="{{ csrf_token() }}">
+
+            <input
+                type="number"
+                step="0.01"
+                min="1"
+                name="amount"
+                placeholder="Amount"
+                required
+            >
+
+            <select name="from_currency">
+
+                <option value="KES">KES</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="JPY">JPY</option>
+                <option value="CAD">CAD</option>
+
+            </select>
+
+            <select name="to_currency">
+
+                <option value="USD">USD</option>
+                <option value="KES">KES</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="JPY">JPY</option>
+                <option value="CAD">CAD</option>
+
+            </select>
+
+            <button type="submit">
+                Convert Currency
+            </button>
+
+        </form>
+
+    </div>
+
+    <!-- 💸 SEND MONEY -->
+
+    <div class="form-card" id="send">
+
+        <h3>💸 Send Money</h3>
+
+        <form method="POST" action="/send-money">
+
+            <input type="hidden"
+                name="_csrf_token"
+                value="{{ csrf_token() }}">
+
+            <input
+                name="receiver"
+                placeholder="Recipient Username"
+                required
+            >
+
+            <input
+                type="number"
+                step="0.01"
+                min="1"
+                name="amount"
+                placeholder="Amount"
+                required
+            >
+
+            <button type="submit">
+                Send Money
+            </button>
+
+        </form>
+
+    </div>
+
+    <!-- ⚠️ DATA ACTIONS -->
+
+    <div class="quick-actions">
+
+        <form method="POST"
+            action="/clear"
+            id="clearDataForm">
+
+            <input type="hidden"
+                name="_csrf_token"
+                value="{{ csrf_token() }}">
+
+            <button type="button"
+                    class="danger"
+                    onclick="openClearDataModal()">
+                🗑️ Clear All Data
+            </button>
+
+        </form>
+
+        <a href="/archive" class="archive-btn">
             📂 View Archive
-        </button>
-    </a>
+        </a>
 
-    <div>
-        <h2>Transactions</h2>
+    </div>
 
-        {% for t in transactions %}
-            <div class="card">
-                <strong>Ksh {{t[2]}}</strong><br>
-                {{t[3]}} | {{t[4]}}<br>
-                {{t[6]}}
+    <!-- 📜 TRANSACTIONS -->
+
+    <div class="transactions-section">
+        <div class="filter-bar">
+
+            <form method="GET" action="/dashboard">
+
+                <select name="filter_type">
+
+                    <option value="">
+                        All Transactions
+                    </option>
+
+                    <option value="income">
+                        Income
+                    </option>
+
+                    <option value="expense">
+                        Expense
+                    </option>
+
+                </select>
+
+                <input
+                    type="text"
+                    name="search"
+                    placeholder="Search category or description..."
+                    value="{{ request.args.get('search', '') }}"
+                >
+
+                <button type="submit">
+                    Filter
+                </button>
+
+            </form>
+
+        </div>
+
+        <div class="section-header">
+
+            <h2>📜 Recent Transactions</h2>
+
+            <span>{{ transactions|length }} total</span>
+
+        </div>
+
+        {% if transactions %}
+
+            {% for t in transactions %}
+
+            <div class="transaction-card">
+
+                <div class="transaction-left">
+
+                    <div class="transaction-icon">
+
+                        {% if t.type == "income" %}
+                            💰
+                        {% else %}
+                            💸
+                        {% endif %}
+
+                    </div>
+
+                    <div>
+
+                        <div class="transaction-title">
+
+                            {{ t.category }}
+
+                        </div>
+
+                        <div class="transaction-desc">
+
+                            {{ t.description }}
+
+                        </div>
+
+                        <div class="transaction-date">
+
+                            {{ t.created_at if t.created_at else "Today" }}
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="transaction-right">
+
+                    {% if t.type=="income" %}
+
+                        <div class="amount income-text">
+
+                            + {{ t.currency }} {{ "{:,.2f}".format(t.amount) }}
+
+                        </div>
+
+                    {% else %}
+
+                        <div class="amount expense-text">
+
+                            - {{ t.currency }} {{ "{:,.2f}".format(t.amount) }}
+
+                        </div>
+
+                    {% endif %}
+
+                    <small class="converted">
+
+                        ≈ KES {{ "{:,.2f}".format(t.converted) }}
+
+                    </small>
+
+                    <form
+                        method="POST"
+                        action="/delete/{{ t.id }}"
+                        style="margin-top:12px;"
+                    >
+
+                        <input
+                            type="hidden"
+                            name="_csrf_token"
+                            value="{{ csrf_token() }}"
+                        >
+
+                        <button
+                            class="delete-btn"
+                            type="submit"
+                        >
+                            Delete
+                        </button>
+
+                    </form>
+
+                </div>
+
             </div>
-        {% endfor %}
+
+            {% endfor %}
+
+        {% else %}
+
+            <div class="empty-state">
+
+                <h3>No transactions yet</h3>
+
+                <p>Your financial activity will appear here.</p>
+
+            </div>
+
+        {% endif %}
+
+        <!-- 📄 PAGINATION -->
+
+        <div class="pagination">
+
+            {% if page > 1 %}
+                <a href="/dashboard?page={{ page - 1 }}&filter_type={{ request.args.get('filter_type', '') }}&search={{ request.args.get('search', '') }}">
+                    ← Previous
+                </a>
+            {% endif %}
+
+            <a class="active-page">
+                Page {{ page }}
+            </a>
+
+            {% if has_next %}
+                <a href="/dashboard?page={{ page + 1 }}&filter_type={{ request.args.get('filter_type', '') }}&search={{ request.args.get('search', '') }}">
+                    Next →
+                </a>
+            {% endif %}
+
+        </div>
+
     </div>
 
     <!-- 🤖 AI CHAT -->
-    <div class="summary">
+
+    <div class="chat-section">
 
         <h3>🤖 AI Assistant</h3>
 
@@ -319,43 +3285,107 @@
 </div>
 
 <!-- 📊 CHART -->
+
 <script>
+
 const data = {{ category_data | tojson }};
+
 const labels = Object.keys(data);
+
 const values = Object.values(data);
 
 const ctx = document.getElementById('myChart').getContext('2d');
 
 new Chart(ctx, {
-    type: 'pie',
+
+    type: 'doughnut',
+
     data: {
+
         labels: labels,
+
         datasets: [{
-            data: values
+
+            data: values,
+
+            backgroundColor:[
+                "#22c55e",
+                "#3b82f6",
+                "#f59e0b",
+                "#ef4444",
+                "#8b5cf6",
+                "#14b8a6"
+            ],
+
+            borderColor:"#0f172a",
+
+            borderWidth:3,
+
+            hoverOffset:12
+
         }]
+    },
+
+    options: {
+
+        responsive:true,
+
+        maintainAspectRatio:false,
+
+        plugins:{
+
+            legend:{
+                position:"bottom",
+
+                labels:{
+                    color:"white",
+                    padding:20,
+
+                    font:{
+                        size:14
+                    }
+                }
+            }
+
+        },
+
+        animation:{
+            animateRotate:true,
+            duration:2000
+        }
+
     }
+
 });
+
 </script>
 
 <!-- 🤖 CHAT -->
+
 <script>
-function sendMessage() {
+
+function sendMessage(){
 
     let input = document.getElementById("userInput");
+
     let message = input.value.trim();
 
-    if (!message) return;
+    if(!message) return;
 
-    fetch("/chat", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
+    fetch("/chat",{
+        method:"POST",
+
+        headers:{
+            "Content-Type":"application/x-www-form-urlencoded"
         },
+
         body:
             "message=" + encodeURIComponent(message) +
             "&_csrf_token={{ csrf_token() }}"
     })
+
     .then(response => response.text())
+
     .then(data => {
 
         let chatBox = document.getElementById("chatBox");
@@ -371,17 +3401,176 @@ function sendMessage() {
         input.value = "";
 
         chatBox.scrollTop = chatBox.scrollHeight;
+
     });
+
 }
+
 </script>
 
 <!-- 📱 SERVICE WORKER -->
+
 <script>
-if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/static/service-worker.js")
+
+if("serviceWorker" in navigator){
+
+    navigator.serviceWorker
+    .register("/static/service-worker.js")
+
     .then(() => console.log("Service Worker Registered"));
+
 }
+
 </script>
 
+<!-- 🔔 NOTIFICATION JAVASCRIPT -->
+
+<script>
+
+function toggleNotifications() {
+
+    let box = document.getElementById("notificationBox");
+
+    if (box.style.display === "block") {
+        box.style.display = "none";
+    } else {
+        box.style.display = "block";
+    }
+
+}
+
+// ✅ CLOSE WHEN CLICKING OUTSIDE
+document.addEventListener("click", function(event) {
+
+    const box = document.getElementById("notificationBox");
+
+    if (
+        !event.target.closest(".notification-wrapper")
+    ) {
+        box.style.display = "none";
+    }
+
+});
+
+</script>
+
+    </div>
+
+</div>
+<!-- ⚠️ CLEAR DATA CONFIRMATION MODAL -->
+
+<div id="clearDataModal" class="clear-modal">
+
+    <div class="clear-modal-content">
+
+        <div class="clear-modal-icon">
+            ⚠️
+        </div>
+
+        <h2>Clear all financial data?</h2>
+
+        <p>
+            This action will permanently remove your:
+        </p>
+
+        <ul>
+            <li>📝 Transactions</li>
+            <li>💳 Wallet balances</li>
+            <li>🤖 AI chat history</li>
+            <li>🔔 Notifications</li>
+            <li>📂 Archived transactions</li>
+        </ul>
+
+        <p class="clear-warning">
+            Your FinFlow account, username, email and password
+            will remain intact.
+        </p>
+
+        <div class="clear-modal-actions">
+
+            <button type="button"
+                    class="cancel-clear"
+                    onclick="closeClearDataModal()">
+                Cancel
+            </button>
+
+            <button type="button"
+                    class="confirm-clear"
+                    onclick="confirmClearData()">
+                Yes, Clear Everything
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+<script>
+
+/* ========================= */
+/* ⚠️ CLEAR DATA MODAL */
+/* ========================= */
+
+function openClearDataModal(){
+
+    const modal =
+        document.getElementById("clearDataModal");
+
+    modal.classList.add("show");
+
+}
+
+
+function closeClearDataModal(){
+
+    const modal =
+        document.getElementById("clearDataModal");
+
+    modal.classList.remove("show");
+
+}
+
+
+function confirmClearData(){
+
+    const form =
+        document.getElementById("clearDataForm");
+
+    form.submit();
+
+}
+
+
+/* Close when clicking outside */
+
+document.addEventListener("click", function(event){
+
+    const modal =
+        document.getElementById("clearDataModal");
+
+    if(
+        event.target === modal
+    ){
+
+        closeClearDataModal();
+
+    }
+
+});
+
+
+/* Close with Escape */
+
+document.addEventListener("keydown", function(event){
+
+    if(event.key === "Escape"){
+
+        closeClearDataModal();
+
+    }
+
+});
+
+</script>
 </body>
 </html>

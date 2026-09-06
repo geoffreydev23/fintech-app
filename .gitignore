@@ -2,3 +2,12 @@
 database.db
 __pycache__/
 *.pyc
+
+# Local development databases
+finflow.db
+
+# Dead / placeholder files kept on disk but not committed
+templates/index_backup.html
+static/css/app.css
+static/js/dashboard.js
+static/js/notifications.js

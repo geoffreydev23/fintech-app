@@ -1,0 +1,205 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+
+<h1>📜 Transactions</h1>
+
+<p style="margin-top:10px;color:#94a3b8;">
+View and manage all your transactions.
+</p>
+
+<!-- 📊 TRANSACTION STATS -->
+
+<div style="
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+gap:15px;
+margin-top:20px;
+margin-bottom:30px;
+">
+
+    <div style="
+    background:#1e293b;
+    padding:20px;
+    border-radius:12px;
+    ">
+        <h3>{{ transactions|length }}</h3>
+        <p>Total Transactions</p>
+    </div>
+
+    <div style="
+    background:#1e293b;
+    padding:20px;
+    border-radius:12px;
+    ">
+        <h3>📈</h3>
+        <p>Income Records</p>
+    </div>
+
+    <div style="
+    background:#1e293b;
+    padding:20px;
+    border-radius:12px;
+    ">
+        <h3>📉</h3>
+        <p>Expense Records</p>
+    </div>
+
+</div>
+
+<!-- 🔍 SEARCH -->
+
+<div style="margin-top:25px;">
+
+    <form method="GET">
+
+        <input
+            type="text"
+            name="search"
+            placeholder="Search transactions..."
+            style="
+                width:100%;
+                padding:12px;
+                background:#1e293b;
+                color:white;
+                border:none;
+                border-radius:10px;
+            "
+        >
+
+    </form>
+
+</div>
+
+<!-- 📜 TRANSACTION LIST -->
+
+<div style="margin-top:30px;">
+
+{% if transactions %}
+
+    {% for t in transactions %}
+
+    <div style="
+        background:#1e293b;
+        padding:18px;
+        border-radius:12px;
+        margin-bottom:15px;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        flex-wrap:wrap;
+        gap:15px;
+    ">
+
+        <div>
+
+            <h3>
+
+                {{ t.category }}
+
+                {% if t.type == 'income' %}
+                    <span style="
+                    background:#22c55e;
+                    padding:4px 8px;
+                    border-radius:20px;
+                    font-size:12px;
+                    margin-left:8px;
+                    ">
+                    Income
+                    </span>
+                {% else %}
+                    <span style="
+                    background:#ef4444;
+                    padding:4px 8px;
+                    border-radius:20px;
+                    font-size:12px;
+                    margin-left:8px;
+                    ">
+                    Expense
+                    </span>
+                {% endif %}
+
+            </h3>
+
+            <p style="color:#94a3b8;">
+                {{ t.description }}
+            </p>
+
+            <small style="color:#94a3b8;">
+                KES Equivalent:
+                {{ t.converted if t.converted else t.amount }}
+            </small>
+
+        </div>
+
+        <div>
+
+            {% if t.type == 'income' %}
+
+                <h3 style="color:#22c55e;">
+                    + {{ t.currency }} {{ t.amount }}
+                </h3>
+
+            {% else %}
+
+                <h3 style="color:#ef4444;">
+                    - {{ t.currency }} {{ t.amount }}
+                </h3>
+
+            {% endif %}
+
+            <!-- 🗑 DELETE BUTTON -->
+
+            <form
+                method="POST"
+                action="/delete/{{ t.id }}"
+                style="margin-top:10px;"
+            >
+
+                <input
+                    type="hidden"
+                    name="_csrf_token"
+                    value="{{ csrf_token() }}"
+                >
+
+                <button
+                    type="submit"
+                    style="
+                    background:#ef4444;
+                    border:none;
+                    color:white;
+                    padding:8px 12px;
+                    border-radius:8px;
+                    cursor:pointer;
+                    "
+                >
+                    Delete
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+    {% endfor %}
+
+{% else %}
+
+    <div style="
+    background:#1e293b;
+    padding:25px;
+    border-radius:12px;
+    text-align:center;
+    ">
+        <h3>No transactions found.</h3>
+        <p style="color:#94a3b8;">
+            Start adding transactions from the dashboard.
+        </p>
+    </div>
+
+{% endif %}
+
+</div>
+
+{% endblock %}
