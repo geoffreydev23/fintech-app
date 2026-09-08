@@ -210,10 +210,16 @@ def is_strong_password(password):
     )
 
 # 💳 GET OR CREATE WALLET
-def get_wallet_balance(user_id, currency):
+def get_wallet_balance(user_id, currency, conn=None):
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    # 🔌 TRANSACTION-AWARE: use the supplied connection when given,
+    # otherwise open (and own) a standalone connection as before
+    if conn is None:
+        own_conn = get_db_connection()
+    else:
+        own_conn = conn
+
+    cur = own_conn.cursor()
 
     if DATABASE_URL:
 
@@ -266,7 +272,9 @@ def get_wallet_balance(user_id, currency):
                 (user_id, currency, 0)
             )
 
-        conn.commit()
+        # 💾 Only the connection owner commits (standalone mode)
+        if conn is None:
+            own_conn.commit()
 
         balance = 0
 
@@ -275,18 +283,29 @@ def get_wallet_balance(user_id, currency):
         balance = wallet[0]
 
     cur.close()
-    conn.close()
+
+    # 🔒 Only the connection owner closes (standalone mode)
+    if conn is None:
+        own_conn.close()
 
     return balance
 
 # 💳 UPDATE WALLET BALANCE
-def update_wallet_balance(user_id, currency, amount, action):
+def update_wallet_balance(user_id, currency, amount, action, conn=None):
 
-    conn = get_db_connection()
-    cur = conn.cursor()
+    # 🔌 TRANSACTION-AWARE: use the supplied connection when given,
+    # otherwise open (and own) a standalone connection as before
+    if conn is None:
+        own_conn = get_db_connection()
+    else:
+        own_conn = conn
 
-    # ✅ CREATE WALLET IF MISSING
-    get_wallet_balance(user_id, currency)
+    cur = own_conn.cursor()
+
+    # ✅ CREATE WALLET IF MISSING (always shares this connection)
+    get_wallet_balance(user_id, currency, conn=own_conn)
+
+    success = True
 
     # ➕ ADD MONEY
     if action == "add":
@@ -313,7 +332,7 @@ def update_wallet_balance(user_id, currency, amount, action):
                 (amount, user_id, currency)
             )
 
-    # ➖ REMOVE MONEY
+    # ➖ REMOVE MONEY (atomic sufficient-funds guard)
     elif action == "subtract":
 
         if DATABASE_URL:
@@ -323,8 +342,9 @@ def update_wallet_balance(user_id, currency, amount, action):
                 SET balance = balance - %s
                 WHERE user_id=%s
                 AND currency=%s
+                AND balance >= %s
                 """,
-                (amount, user_id, currency)
+                (amount, user_id, currency, amount)
             )
 
         else:
@@ -334,14 +354,26 @@ def update_wallet_balance(user_id, currency, amount, action):
                 SET balance = balance - ?
                 WHERE user_id=?
                 AND currency=?
+                AND balance >= ?
                 """,
-                (amount, user_id, currency)
+                (amount, user_id, currency, amount)
             )
 
-    conn.commit()
+        # ❌ rowcount != 1 → insufficient funds or missing wallet
+        if cur.rowcount != 1:
+            success = False
+
+    # 💾 Only the connection owner commits (standalone mode)
+    if conn is None:
+        own_conn.commit()
 
     cur.close()
-    conn.close()
+
+    # 🔒 Only the connection owner closes (standalone mode)
+    if conn is None:
+        own_conn.close()
+
+    return success
 
 # 🧠 AUTO CATEGORY
 def auto_category(desc):
@@ -915,19 +947,41 @@ def withdraw():
     if amount <= 0:
         return redirect('/dashboard')
 
-    # 🔍 Validate against the user's KES wallet (source of truth)
-    wallet_balance = get_wallet_balance(session['user_id'], "KES")
+    conn = get_db_connection()
 
-    if amount > wallet_balance:
+    try:
+
+        # 🔍 Validate against the user's KES wallet (source of truth)
+        wallet_balance = get_wallet_balance(session['user_id'], "KES", conn=conn)
+
+        if amount > wallet_balance:
+            conn.rollback()
+            return redirect('/dashboard')
+
+        # 💸 Deduct from the KES wallet (guarded, users.balance is NOT touched)
+        debit_ok = update_wallet_balance(
+            session['user_id'],
+            "KES",
+            amount,
+            "subtract",
+            conn=conn
+        )
+
+        if not debit_ok:
+            conn.rollback()
+            return redirect('/dashboard')
+
+        conn.commit()
+
+    except Exception:
+
+        conn.rollback()
+
         return redirect('/dashboard')
 
-    # 💸 Deduct from the KES wallet (users.balance is NOT touched)
-    update_wallet_balance(
-        session['user_id'],
-        "KES",
-        amount,
-        "subtract"
-    )
+    finally:
+
+        conn.close()
 
     create_notification(
         session['user_id'],
@@ -961,149 +1015,165 @@ def send_money():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # 🔍 GET SENDER USERNAME
-    if DATABASE_URL:
-        cur.execute(
-            "SELECT username FROM users WHERE id=%s",
-            (session['user_id'],)
-        )
-    else:
-        cur.execute(
-            "SELECT username FROM users WHERE id=?",
-            (session['user_id'],)
+    try:
+
+        # 🔍 GET SENDER USERNAME
+        if DATABASE_URL:
+            cur.execute(
+                "SELECT username FROM users WHERE id=%s",
+                (session['user_id'],)
+            )
+        else:
+            cur.execute(
+                "SELECT username FROM users WHERE id=?",
+                (session['user_id'],)
+            )
+
+        sender = cur.fetchone()
+
+        if not sender:
+            conn.rollback()
+            return redirect('/dashboard')
+
+        sender_username = sender[0]
+
+        # 🔍 GET SENDER KES WALLET BALANCE (source of truth)
+        sender_balance = get_wallet_balance(session['user_id'], "KES", conn=conn)
+
+        # ❌ INSUFFICIENT FUNDS
+        if amount > sender_balance:
+            conn.rollback()
+            return redirect('/dashboard')
+
+        # 🔍 FIND RECEIVER
+        if DATABASE_URL:
+            cur.execute(
+                "SELECT id FROM users WHERE username=%s",
+                (receiver_username,)
+            )
+        else:
+            cur.execute(
+                "SELECT id FROM users WHERE username=?",
+                (receiver_username,)
+            )
+
+        receiver = cur.fetchone()
+
+        # ❌ USER NOT FOUND
+        if not receiver:
+            conn.rollback()
+            return redirect('/dashboard')
+
+        receiver_id = receiver[0]
+
+        # ❌ BLOCK SELF SEND
+        if receiver_id == session['user_id']:
+            conn.rollback()
+            return redirect('/dashboard')
+
+        # 💸 REMOVE FROM SENDER KES WALLET (guarded, users.balance is NOT touched)
+        debit_ok = update_wallet_balance(
+            session['user_id'],
+            "KES",
+            amount,
+            "subtract",
+            conn=conn
         )
 
-    sender = cur.fetchone()
+        if not debit_ok:
+            conn.rollback()
+            return redirect('/dashboard')
 
-    if not sender:
-        cur.close()
-        conn.close()
+        # 💰 ADD TO RECEIVER KES WALLET (users.balance is NOT touched)
+        update_wallet_balance(
+            receiver_id,
+            "KES",
+            amount,
+            "add",
+            conn=conn
+        )
+
+        # 📝 SENDER TRANSACTION
+        if DATABASE_URL:
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, type, category, source, description)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    "expense",
+                    "Transfer",
+                    "Wallet",
+                    f"Sent money to {receiver_username}"
+                )
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, type, category, source, description)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    "expense",
+                    "Transfer",
+                    "Wallet",
+                    f"Sent money to {receiver_username}"
+                )
+            )
+
+        # 📝 RECEIVER TRANSACTION
+        if DATABASE_URL:
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, type, category, source, description)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    receiver_id,
+                    amount,
+                    "income",
+                    "Transfer",
+                    "Wallet",
+                    f"Received money from {sender_username}"
+                )
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, type, category, source, description)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    receiver_id,
+                    amount,
+                    "income",
+                    "Transfer",
+                    "Wallet",
+                    f"Received money from {sender_username}"
+                )
+            )
+
+        conn.commit()
+
+    except Exception:
+
+        conn.rollback()
+
         return redirect('/dashboard')
 
-    sender_username = sender[0]
+    finally:
 
-    # 🔍 GET SENDER KES WALLET BALANCE (source of truth)
-    sender_balance = get_wallet_balance(session['user_id'], "KES")
-
-    # ❌ INSUFFICIENT FUNDS
-    if amount > sender_balance:
         cur.close()
         conn.close()
-        return redirect('/dashboard')
 
-    # 🔍 FIND RECEIVER
-    if DATABASE_URL:
-        cur.execute(
-            "SELECT id FROM users WHERE username=%s",
-            (receiver_username,)
-        )
-    else:
-        cur.execute(
-            "SELECT id FROM users WHERE username=?",
-            (receiver_username,)
-        )
-
-    receiver = cur.fetchone()
-
-    # ❌ USER NOT FOUND
-    if not receiver:
-        cur.close()
-        conn.close()
-        return redirect('/dashboard')
-
-    receiver_id = receiver[0]
-
-    # ❌ BLOCK SELF SEND
-    if receiver_id == session['user_id']:
-        cur.close()
-        conn.close()
-        return redirect('/dashboard')
-
-    # 💸 REMOVE FROM SENDER KES WALLET (users.balance is NOT touched)
-    update_wallet_balance(
-        session['user_id'],
-        "KES",
-        amount,
-        "subtract"
-    )
-
-    # 💰 ADD TO RECEIVER KES WALLET (users.balance is NOT touched)
-    update_wallet_balance(
-        receiver_id,
-        "KES",
-        amount,
-        "add"
-    )
-
-    # 📝 SENDER TRANSACTION
-    if DATABASE_URL:
-        cur.execute(
-            """
-            INSERT INTO transactions
-            (user_id, amount, type, category, source, description)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (
-                session['user_id'],
-                amount,
-                "expense",
-                "Transfer",
-                "Wallet",
-                f"Sent money to {receiver_username}"
-            )
-        )
-    else:
-        cur.execute(
-            """
-            INSERT INTO transactions
-            (user_id, amount, type, category, source, description)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                session['user_id'],
-                amount,
-                "expense",
-                "Transfer",
-                "Wallet",
-                f"Sent money to {receiver_username}"
-            )
-        )
-
-    # 📝 RECEIVER TRANSACTION
-    if DATABASE_URL:
-        cur.execute(
-            """
-            INSERT INTO transactions
-            (user_id, amount, type, category, source, description)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (
-                receiver_id,
-                amount,
-                "income",
-                "Transfer",
-                "Wallet",
-                f"Received money from {sender_username}"
-            )
-        )
-    else:
-        cur.execute(
-            """
-            INSERT INTO transactions
-            (user_id, amount, type, category, source, description)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                receiver_id,
-                amount,
-                "income",
-                "Transfer",
-                "Wallet",
-                f"Received money from {sender_username}"
-            )
-        )
-
-    conn.commit()
     create_notification(
         session['user_id'],
         f"💸 You sent Ksh {amount} to {receiver_username}"
@@ -1113,9 +1183,6 @@ def send_money():
         receiver_id,
         f"💰 You received Ksh {amount} from {sender_username}"
     )
-
-    cur.close()
-    conn.close()
 
     return redirect('/dashboard?success=sent')
 
@@ -1630,116 +1697,132 @@ def convert_currency_wallet():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # 🔍 CHECK SOURCE WALLET BALANCE
-    
-    wallet_balance = get_wallet_balance(
-        session['user_id'],
-        from_currency
-    )
+    try:
 
-    # ❌ INSUFFICIENT BALANCE
-    if amount > wallet_balance:
-        cur.close()
-        conn.close()
+        # 🔍 CHECK SOURCE WALLET BALANCE
+
+        wallet_balance = get_wallet_balance(
+            session['user_id'],
+            from_currency,
+            conn=conn
+        )
+
+        # ❌ INSUFFICIENT BALANCE
+        if amount > wallet_balance:
+            conn.rollback()
+            return redirect('/dashboard')
+
+        # ➖ REMOVE FROM OLD CURRENCY (ledger)
+        if DATABASE_URL:
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    from_currency,
+                    "expense",
+                    "Conversion",
+                    "Wallet",
+                    f"Converted to {to_currency}"
+                )
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (?,?,?,?,?,?,?)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    from_currency,
+                    "expense",
+                    "Conversion",
+                    "Wallet",
+                    f"Converted to {to_currency}"
+                )
+            )
+
+        # ➕ ADD TO NEW CURRENCY (ledger)
+        if DATABASE_URL:
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                """,
+                (
+                    session['user_id'],
+                    converted_amount,
+                    to_currency,
+                    "income",
+                    "Conversion",
+                    "Wallet",
+                    f"Converted from {from_currency}"
+                )
+            )
+        else:
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (?,?,?,?,?,?,?)
+                """,
+                (
+                    session['user_id'],
+                    converted_amount,
+                    to_currency,
+                    "income",
+                    "Conversion",
+                    "Wallet",
+                    f"Converted from {from_currency}"
+                )
+            )
+
+        # ➖ REMOVE OLD CURRENCY (guarded, same transaction)
+        debit_ok = update_wallet_balance(
+            session['user_id'],
+            from_currency,
+            amount,
+            "subtract",
+            conn=conn
+        )
+
+        if not debit_ok:
+            conn.rollback()
+            return redirect('/dashboard')
+
+        # ➕ ADD NEW CURRENCY (same transaction)
+        update_wallet_balance(
+            session['user_id'],
+            to_currency,
+            converted_amount,
+            "add",
+            conn=conn
+        )
+
+        conn.commit()
+
+    except Exception:
+
+        conn.rollback()
+
         return redirect('/dashboard')
 
-    # ➖ REMOVE FROM OLD CURRENCY
-    if DATABASE_URL:
-        cur.execute(
-            """
-            INSERT INTO transactions
-            (user_id, amount, currency, type, category, source, description)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
-            """,
-            (
-                session['user_id'],
-                amount,
-                from_currency,
-                "expense",
-                "Conversion",
-                "Wallet",
-                f"Converted to {to_currency}"
-            )
-        )
-    else:
-        cur.execute(
-            """
-            INSERT INTO transactions
-            (user_id, amount, currency, type, category, source, description)
-            VALUES (?,?,?,?,?,?,?)
-            """,
-            (
-                session['user_id'],
-                amount,
-                from_currency,
-                "expense",
-                "Conversion",
-                "Wallet",
-                f"Converted to {to_currency}"
-            )
-        )
+    finally:
 
-    # ➕ ADD TO NEW CURRENCY
-    if DATABASE_URL:
-        cur.execute(
-            """
-            INSERT INTO transactions
-            (user_id, amount, currency, type, category, source, description)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
-            """,
-            (
-                session['user_id'],
-                converted_amount,
-                to_currency,
-                "income",
-                "Conversion",
-                "Wallet",
-                f"Converted from {from_currency}"
-            )
-        )
-    else:
-        cur.execute(
-            """
-            INSERT INTO transactions
-            (user_id, amount, currency, type, category, source, description)
-            VALUES (?,?,?,?,?,?,?)
-            """,
-            (
-                session['user_id'],
-                converted_amount,
-                to_currency,
-                "income",
-                "Conversion",
-                "Wallet",
-                f"Converted from {from_currency}"
-            )
-        )
-
-    # ➖ REMOVE OLD CURRENCY
-    update_wallet_balance(
-        session['user_id'],
-        from_currency,
-        amount,
-        "subtract"
-    )
-
-    # ➕ ADD NEW CURRENCY
-    update_wallet_balance(
-        session['user_id'],
-        to_currency,
-        converted_amount,
-        "add"
-    )
-
-    conn.commit()
+        cur.close()
+        conn.close()
 
     create_notification(
         session['user_id'],
         f"💱 Converted {amount} {from_currency} → {to_currency}"
     )
-
-    cur.close()
-    conn.close()
 
     return redirect('/dashboard?success=converted')
 
@@ -3698,37 +3781,69 @@ def transfer_wallet():
 
         return redirect('/wallet')
 
-    # Check source wallet balance
-    source_balance = get_wallet_balance(
-        session['user_id'],
-        from_currency
-    )
+    conn = get_db_connection()
 
-    # Prevent insufficient funds
-    if source_balance < amount:
+    try:
 
-        flash(
-            "Insufficient funds",
-            "error"
+        # Check source wallet balance
+        source_balance = get_wallet_balance(
+            session['user_id'],
+            from_currency,
+            conn=conn
         )
+
+        # Prevent insufficient funds
+        if source_balance < amount:
+
+            conn.rollback()
+
+            flash(
+                "Insufficient funds",
+                "error"
+            )
+
+            return redirect('/wallet')
+
+        # Remove from source wallet (guarded)
+        debit_ok = update_wallet_balance(
+            session['user_id'],
+            from_currency,
+            amount,
+            "subtract",
+            conn=conn
+        )
+
+        if not debit_ok:
+
+            conn.rollback()
+
+            flash(
+                "Insufficient funds",
+                "error"
+            )
+
+            return redirect('/wallet')
+
+        # Add to destination wallet
+        update_wallet_balance(
+            session['user_id'],
+            to_currency,
+            amount,
+            "add",
+            conn=conn
+        )
+
+        conn.commit()
+
+    except Exception:
+
+        conn.rollback()
 
         return redirect('/wallet')
 
-    # Remove from source wallet
-    update_wallet_balance(
-        session['user_id'],
-        from_currency,
-        amount,
-        "subtract"
-    )
+    finally:
 
-    # Add to destination wallet
-    update_wallet_balance(
-        session['user_id'],
-        to_currency,
-        amount,
-        "add"
-    )
+        conn.close()
 
     flash(
         f"Transferred {amount} {from_currency} to {to_currency}",
