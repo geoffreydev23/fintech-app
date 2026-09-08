@@ -545,10 +545,15 @@ def init_db():
                 reset_token TEXT,
                 token_expiry TEXT,
                 otp TEXT,
-                otp_expiry TEXT,
-                balance REAL DEFAULT 0
+                otp_expiry TEXT
             )
         ''')
+
+        # 🔧 PostgreSQL migration: remove deprecated users.balance column (idempotent)
+        try:
+            cur.execute("ALTER TABLE users DROP COLUMN IF EXISTS balance")
+        except Exception:
+            pass
 
         # ✅ ADD PREFERRED CURRENCY COLUMN SAFELY
         try:
@@ -604,6 +609,50 @@ def init_db():
 
     else:
         # 🪶 SQLite version
+
+        # 🔧 SQLite migration: remove deprecated users.balance column (idempotent)
+        cur.execute("PRAGMA table_info(users)")
+        columns_info = cur.fetchall()
+        if columns_info:
+            existing_columns = [col[1] for col in columns_info]
+            if "balance" in existing_columns:
+                expected_columns = [
+                    "id", "username", "password", "reset_token", "token_expiry",
+                    "otp", "otp_expiry", "balance", "email", "preferred_currency"
+                ]
+                if existing_columns == expected_columns:
+                    # Safe to migrate: rebuild users table without balance,
+                    # preserving all other user data exactly
+                    cur.execute("""
+                        CREATE TABLE users_new (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            username TEXT UNIQUE,
+                            password TEXT,
+                            reset_token TEXT,
+                            token_expiry TEXT,
+                            otp TEXT,
+                            otp_expiry TEXT,
+                            email TEXT,
+                            preferred_currency TEXT DEFAULT 'KES'
+                        )
+                    """)
+                    cur.execute("""
+                        INSERT INTO users_new (id, username, password, reset_token, token_expiry, otp, otp_expiry, email, preferred_currency)
+                        SELECT id, username, password, reset_token, token_expiry, otp, otp_expiry, email, preferred_currency FROM users
+                    """)
+                    cur.execute("DROP TABLE users")
+                    cur.execute("ALTER TABLE users_new RENAME TO users")
+                else:
+                    raise RuntimeError(
+                        "users table schema is unexpected: got "
+                        + str(existing_columns)
+                        + "; expected "
+                        + str(expected_columns)
+                        + ". Aborting migration to prevent data loss."
+                    )
+            # else: balance already absent — no action needed
+        # else: users table does not exist yet — CREATE TABLE below creates it without balance
+
         cur.execute('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -612,8 +661,7 @@ def init_db():
                 reset_token TEXT,
                 token_expiry TEXT,
                 otp TEXT,
-                otp_expiry TEXT,
-                balance REAL DEFAULT 0
+                otp_expiry TEXT
             )
         ''')
 
@@ -840,31 +888,13 @@ def deposit():
     if amount <= 0:
         return redirect('/dashboard')
 
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    if DATABASE_URL:
-        cur.execute(
-            "UPDATE users SET balance = balance + %s WHERE id=%s",
-            (amount, session['user_id'])
-        )
-    else:
-        cur.execute(
-            "UPDATE users SET balance = balance + ? WHERE id=?",
-            (amount, session['user_id'])
-        )
-
-    # 💳 UPDATE WALLET
+    # 💳 Credit the KES wallet (users.balance is NOT touched)
     update_wallet_balance(
         session['user_id'],
         "KES",
         amount,
         "add"
     )
-
-    conn.commit()
-    cur.close()
-    conn.close()
 
     return redirect('/dashboard')
 
@@ -882,35 +912,16 @@ def withdraw():
         amount = float(amount_text)
     except:
         return redirect('/dashboard')
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    # 🔍 Get current balance
-    if DATABASE_URL:
-        cur.execute("SELECT balance FROM users WHERE id=%s", (session['user_id'],))
-    else:
-        cur.execute("SELECT balance FROM users WHERE id=?", (session['user_id'],))
-
-    balance = cur.fetchone()[0]
-
-    if amount <= 0 or amount > balance:
-        cur.close()
-        conn.close()
+    if amount <= 0:
         return redirect('/dashboard')
 
-    # 💸 Deduct
-    if DATABASE_URL:
-        cur.execute(
-            "UPDATE users SET balance = balance - %s WHERE id=%s",
-            (amount, session['user_id'])
-        )
-    else:
-        cur.execute(
-            "UPDATE users SET balance = balance - ? WHERE id=?",
-            (amount, session['user_id'])
-        )
+    # 🔍 Validate against the user's KES wallet (source of truth)
+    wallet_balance = get_wallet_balance(session['user_id'], "KES")
 
-    # 💳 UPDATE WALLET
+    if amount > wallet_balance:
+        return redirect('/dashboard')
+
+    # 💸 Deduct from the KES wallet (users.balance is NOT touched)
     update_wallet_balance(
         session['user_id'],
         "KES",
@@ -918,13 +929,10 @@ def withdraw():
         "subtract"
     )
 
-    conn.commit()
     create_notification(
         session['user_id'],
         f"💸 Withdrawal of Ksh {amount} successful"
     )
-    cur.close()
-    conn.close()
 
     return redirect('/dashboard?success=withdraw')
 
@@ -953,15 +961,15 @@ def send_money():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    # 🔍 GET SENDER BALANCE
+    # 🔍 GET SENDER USERNAME
     if DATABASE_URL:
         cur.execute(
-            "SELECT username, balance FROM users WHERE id=%s",
+            "SELECT username FROM users WHERE id=%s",
             (session['user_id'],)
         )
     else:
         cur.execute(
-            "SELECT username, balance FROM users WHERE id=?",
+            "SELECT username FROM users WHERE id=?",
             (session['user_id'],)
         )
 
@@ -973,7 +981,9 @@ def send_money():
         return redirect('/dashboard')
 
     sender_username = sender[0]
-    sender_balance = sender[1]
+
+    # 🔍 GET SENDER KES WALLET BALANCE (source of truth)
+    sender_balance = get_wallet_balance(session['user_id'], "KES")
 
     # ❌ INSUFFICIENT FUNDS
     if amount > sender_balance:
@@ -1009,18 +1019,7 @@ def send_money():
         conn.close()
         return redirect('/dashboard')
 
-    # 💸 REMOVE FROM SENDER
-    if DATABASE_URL:
-        cur.execute(
-            "UPDATE users SET balance = balance - %s WHERE id=%s",
-            (amount, session['user_id'])
-        )
-    else:
-        cur.execute(
-            "UPDATE users SET balance = balance - ? WHERE id=?",
-            (amount, session['user_id'])
-        )
-    
+    # 💸 REMOVE FROM SENDER KES WALLET (users.balance is NOT touched)
     update_wallet_balance(
         session['user_id'],
         "KES",
@@ -1028,18 +1027,7 @@ def send_money():
         "subtract"
     )
 
-    # 💰 ADD TO RECEIVER
-    if DATABASE_URL:
-        cur.execute(
-            "UPDATE users SET balance = balance + %s WHERE id=%s",
-            (amount, receiver_id)
-        )
-    else:
-        cur.execute(
-            "UPDATE users SET balance = balance + ? WHERE id=?",
-            (amount, receiver_id)
-        )
-
+    # 💰 ADD TO RECEIVER KES WALLET (users.balance is NOT touched)
     update_wallet_balance(
         receiver_id,
         "KES",
@@ -1145,22 +1133,7 @@ def mpesa():
         if amount <= 0:
             return redirect('/dashboard')
 
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        # 💰 Add money to balance
-        if DATABASE_URL:
-            cur.execute(
-                "UPDATE users SET balance = balance + %s WHERE id=%s",
-                (amount, session['user_id'])
-            )
-        else:
-            cur.execute(
-                "UPDATE users SET balance = balance + ? WHERE id=?",
-                (amount, session['user_id'])
-            )
-
-        # 💳 UPDATE WALLET
+        # 💳 Credit the KES wallet (users.balance is NOT touched)
         update_wallet_balance(
             session['user_id'],
             "KES",
@@ -1168,13 +1141,10 @@ def mpesa():
             "add"
         )
 
-        conn.commit()
         create_notification(
             session['user_id'],
             f"💳 M-Pesa deposit of Ksh {amount} successful"
         )
-        cur.close()
-        conn.close()
 
         print(f"✅ M-Pesa deposit success: {phone} deposited {amount}")
 
@@ -1262,9 +1232,15 @@ def reset_with_token(token):
 
     # 🔍 Find user by token
     if DATABASE_URL:
-        cur.execute("SELECT * FROM users WHERE reset_token=%s", (token,))
+        cur.execute(
+            "SELECT id, token_expiry, otp, otp_expiry FROM users WHERE reset_token=%s",
+            (token,),
+        )
     else:
-        cur.execute("SELECT * FROM users WHERE reset_token=?", (token,))
+        cur.execute(
+            "SELECT id, token_expiry, otp, otp_expiry FROM users WHERE reset_token=?",
+            (token,),
+        )
 
     user = cur.fetchone()
 
@@ -1275,8 +1251,8 @@ def reset_with_token(token):
 
     # 🧠 SAFE expiry parsing (prevents crashes)
     try:
-        expiry = datetime.fromisoformat(user[5]) if user[5] else None
-        otp_expiry = datetime.fromisoformat(user[7]) if user[7] else None
+        expiry = datetime.fromisoformat(user["token_expiry"]) if user["token_expiry"] else None
+        otp_expiry = datetime.fromisoformat(user["otp_expiry"]) if user["otp_expiry"] else None
     except Exception as e:
         print("Expiry parse error:", e)
         cur.close()
@@ -1307,7 +1283,7 @@ def reset_with_token(token):
         otp_input = request.form.get('otp', '').strip()
 
         # ✅ FIXED: correct OTP index
-        if not otp_input or otp_input != str(user[6]):
+        if not otp_input or otp_input != str(user["otp"]):
             cur.close()
             conn.close()
             return "Wrong OTP"
@@ -1325,12 +1301,12 @@ def reset_with_token(token):
         if DATABASE_URL:
             cur.execute(
                 "UPDATE users SET password=%s, reset_token=NULL, otp=NULL, token_expiry=NULL, otp_expiry=NULL WHERE id=%s",
-                (hashed, user[0])
+                (hashed, user["id"])
             )
         else:
             cur.execute(
                 "UPDATE users SET password=?, reset_token=NULL, otp=NULL, token_expiry=NULL, otp_expiry=NULL WHERE id=?",
-                (hashed, user[0])
+                (hashed, user["id"])
             )
 
         conn.commit()
