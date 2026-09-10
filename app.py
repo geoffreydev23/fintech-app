@@ -948,6 +948,7 @@ def withdraw():
         return redirect('/dashboard')
 
     conn = get_db_connection()
+    cur = conn.cursor()
 
     try:
 
@@ -971,6 +972,45 @@ def withdraw():
             conn.rollback()
             return redirect('/dashboard')
 
+        # 📝 Record withdrawal in transaction ledger
+        if DATABASE_URL:
+
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    "KES",
+                    "expense",
+                    "Withdrawal",
+                    "External",
+                    f"Withdrawal of Ksh {amount}"
+                )
+            )
+
+        else:
+
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    "KES",
+                    "expense",
+                    "Withdrawal",
+                    "External",
+                    f"Withdrawal of Ksh {amount}"
+                )
+            )
+
         conn.commit()
 
     except Exception:
@@ -981,6 +1021,7 @@ def withdraw():
 
     finally:
 
+        cur.close()
         conn.close()
 
     create_notification(
