@@ -1865,62 +1865,64 @@ def dashboard():
         
         currency = request.form.get('currency', 'KES')
 
-        # ➕ INSERT TRANSACTION 
-        if DATABASE_URL:
-            cur.execute(
-                """
-                INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
+        try:
 
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    session['user_id'],
-                    amount,
-                    currency,
-                    t_type,
-                    category,
-                    source,
-                    desc
+            # ➕ INSERT TRANSACTION (ledger)
+            if DATABASE_URL:
+                cur.execute(
+                    """
+                    INSERT INTO transactions
+                    (user_id, amount, currency, type, category, source, description)
+
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        session['user_id'],
+                        amount,
+                        currency,
+                        t_type,
+                        category,
+                        source,
+                        desc
+                    )
                 )
-            )
-        else:
-            cur.execute(
-                """
-                INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO transactions
+                    (user_id, amount, currency, type, category, source, description)
 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    session['user_id'],
-                    amount,
-                    currency,
-                    t_type,
-                    category,
-                    source,
-                    desc
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session['user_id'],
+                        amount,
+                        currency,
+                        t_type,
+                        category,
+                        source,
+                        desc
+                    )
                 )
-            )
 
-        # 📧 GET USER EMAIL
-        if DATABASE_URL:
-            cur.execute(
-                "SELECT email FROM users WHERE id=%s",
-                (session['user_id'],)
-            )
-        else:
-            cur.execute(
-                "SELECT email FROM users WHERE id=?",
-                (session['user_id'],)
-            )
+            # 📧 GET USER EMAIL
+            if DATABASE_URL:
+                cur.execute(
+                    "SELECT email FROM users WHERE id=%s",
+                    (session['user_id'],)
+                )
+            else:
+                cur.execute(
+                    "SELECT email FROM users WHERE id=?",
+                    (session['user_id'],)
+                )
 
-        user_email = cur.fetchone()[0]
+            user_email = cur.fetchone()[0]
 
-        # 🔔 SEND TRANSACTION NOTIFICATION
-        if user_email:
+            # 🔔 SEND TRANSACTION NOTIFICATION
+            if user_email:
 
-            message = f"""
+                message = f"""
         Transaction Alert
 
         Type: {t_type}
@@ -1931,32 +1933,50 @@ def dashboard():
         Your transaction was recorded successfully.
         """
 
-            send_email(
-                user_email,
-                "FinFlow Transaction Alert",
-                message
-            )
+                send_email(
+                    user_email,
+                    "FinFlow Transaction Alert",
+                    message
+                )
 
-        # SAVE TRANSACTION FIRST
-        conn.commit()
+            # 💳 UPDATE REAL WALLET (same transaction as the ledger INSERT)
 
-        # 💳 UPDATE REAL WALLET
+            if t_type == "income":
+                update_wallet_balance(
+                    session['user_id'],
+                    currency,
+                    amount,
+                    "add",
+                    conn=conn
+                )
 
-        if t_type == "income":
-            update_wallet_balance(
-                session['user_id'],
-                currency,
-                amount,
-                "add"
-            )
+            elif t_type == "expense":
+                expense_ok = update_wallet_balance(
+                    session['user_id'],
+                    currency,
+                    amount,
+                    "subtract",
+                    conn=conn
+                )
 
-        elif t_type == "expense":
-            update_wallet_balance(
-                session['user_id'],
-                currency,
-                amount,
-                "subtract"
-            )
+                if not expense_ok:
+                    conn.rollback()
+                    return redirect('/dashboard')
+
+            # 💾 Commit ledger + wallet together
+            conn.commit()
+
+        except Exception:
+
+            conn.rollback()
+
+            return redirect('/dashboard')
+
+        finally:
+
+            cur.close()
+            conn.close()
+
         create_notification(
             session['user_id'],
             f"📝 {t_type.title()} transaction of Ksh {amount} added"
