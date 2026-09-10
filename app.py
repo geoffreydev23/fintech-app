@@ -3843,6 +3843,7 @@ def transfer_wallet():
         return redirect('/wallet')
 
     conn = get_db_connection()
+    cur = conn.cursor()
 
     try:
 
@@ -3894,6 +3895,84 @@ def transfer_wallet():
             conn=conn
         )
 
+        # 📝 Record transfer in transaction ledger (expense leg)
+        if DATABASE_URL:
+
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    from_currency,
+                    "expense",
+                    "Transfer",
+                    "Wallet",
+                    f"Transferred {amount} {from_currency} to {to_currency}"
+                )
+            )
+
+        else:
+
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    from_currency,
+                    "expense",
+                    "Transfer",
+                    "Wallet",
+                    f"Transferred {amount} {from_currency} to {to_currency}"
+                )
+            )
+
+        # 📝 Record transfer in transaction ledger (income leg)
+        if DATABASE_URL:
+
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    to_currency,
+                    "income",
+                    "Transfer",
+                    "Wallet",
+                    f"Received {amount} {to_currency} from {from_currency}"
+                )
+            )
+
+        else:
+
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session['user_id'],
+                    amount,
+                    to_currency,
+                    "income",
+                    "Transfer",
+                    "Wallet",
+                    f"Received {amount} {to_currency} from {from_currency}"
+                )
+            )
+
         conn.commit()
 
     except Exception:
@@ -3904,6 +3983,7 @@ def transfer_wallet():
 
     finally:
 
+        cur.close()
         conn.close()
 
     flash(
