@@ -1483,6 +1483,9 @@ def clear():
 
     conn = get_db_connection()
 
+    # 🧵 Bound before try so finally can never hit an unbound cursor
+    cur = None
+
     try:
 
         # =========================
@@ -1568,7 +1571,9 @@ def clear():
 
     finally:
 
-        cur.close()
+        if cur is not None:
+            cur.close()
+
         conn.close()
 
 # 🔄 RESTORE
