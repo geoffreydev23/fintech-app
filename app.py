@@ -920,13 +920,80 @@ def deposit():
     if amount <= 0:
         return redirect('/dashboard')
 
-    # 💳 Credit the KES wallet (users.balance is NOT touched)
-    update_wallet_balance(
-        session['user_id'],
-        "KES",
-        amount,
-        "add"
-    )
+    user_id = session['user_id']
+
+    # ── financial transaction (wallet credit + ledger, ONE connection, ONE commit) ──
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+
+        # 💳 Credit the KES wallet (users.balance is NOT touched, same transaction)
+        ok = update_wallet_balance(
+            user_id,
+            "KES",
+            amount,
+            "add",
+            conn=conn
+        )
+
+        if not ok:
+            raise RuntimeError("Deposit wallet credit failed")
+
+        # 📝 Record deposit in transaction ledger (same connection)
+        if DATABASE_URL:
+
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    user_id,
+                    amount,
+                    "KES",
+                    "income",
+                    "Deposit",
+                    "External",
+                    f"Deposited {amount} KES"
+                )
+            )
+
+        else:
+
+            cur.execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    amount,
+                    "KES",
+                    "income",
+                    "Deposit",
+                    "External",
+                    f"Deposited {amount} KES"
+                )
+            )
+
+        # 💾 Commit wallet credit + ledger row together (exactly once)
+        conn.commit()
+
+    except Exception as e:
+
+        conn.rollback()
+
+        print("Deposit Error:", e)
+
+        return redirect('/dashboard')
+
+    finally:
+
+        cur.close()
+        conn.close()
 
     return redirect('/dashboard')
 
