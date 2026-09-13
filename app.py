@@ -1230,37 +1230,91 @@ def send_money():
 # 💳 M-PESA DEPOSIT
 @app.route('/mpesa', methods=['POST'])
 def mpesa():
+
     if 'user_id' not in session:
         return redirect('/login')
 
+    # ── validation (preserves existing parse-error → failure redirect) ──
     try:
         phone = request.form['phone']
         amount = float(request.form['amount'])
+    except Exception:
+        return redirect('/dashboard')
 
-        # ✅ Simple validation
-        if amount <= 0:
-            return redirect('/dashboard')
+    # ✅ Simple validation
+    if amount <= 0:
+        return redirect('/dashboard')
 
-        # 💳 Credit the KES wallet (users.balance is NOT touched)
-        update_wallet_balance(
-            session['user_id'],
+    user_id = session['user_id']
+
+    # ── financial transaction (wallet credit + ledger, ONE connection, ONE commit) ──
+    conn = get_db_connection()
+    try:
+
+        ok = update_wallet_balance(
+            user_id,
             "KES",
             amount,
-            "add"
+            "add",
+            conn=conn
         )
+        if not ok:
+            raise RuntimeError("M-Pesa wallet credit failed")
 
-        create_notification(
-            session['user_id'],
-            f"💳 M-Pesa deposit of Ksh {amount} successful"
-        )
+        if DATABASE_URL:
+            conn.cursor().execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    user_id,
+                    amount,
+                    "KES",
+                    "income",
+                    "M-Pesa",
+                    "M-Pesa",
+                    f"M-Pesa deposit of Ksh {amount}",
+                ),
+            )
+        else:
+            conn.cursor().execute(
+                """
+                INSERT INTO transactions
+                (user_id, amount, currency, type, category, source, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    amount,
+                    "KES",
+                    "income",
+                    "M-Pesa",
+                    "M-Pesa",
+                    f"M-Pesa deposit of Ksh {amount}",
+                ),
+            )
 
-        print(f"✅ M-Pesa deposit success: {phone} deposited {amount}")
-
-        return redirect('/dashboard?success=mpesa')
+        conn.commit()
 
     except Exception as e:
+        conn.rollback()
         print("M-Pesa Error:", e)
         return redirect('/dashboard')
+    finally:
+        conn.close()
+
+    # ── best-effort notification (after financial commit) ──
+    try:
+        create_notification(
+            user_id,
+            f"💳 M-Pesa deposit of Ksh {amount} successful"
+        )
+    except Exception as e:
+        print("M-Pesa notification error:", e)
+
+    return redirect('/dashboard?success=mpesa')
 
 # 🔑 REQUEST RESET (FIXED TO USE EMAIL)
 @app.route('/request-reset', methods=['GET', 'POST'])
