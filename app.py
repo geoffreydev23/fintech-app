@@ -2025,7 +2025,16 @@ def dashboard():
         except:
             return redirect('/dashboard')
 
+        # ✅ Reject zero/negative amounts (prevents wallet manipulation)
+        if amount <= 0:
+            return redirect('/dashboard')
+
         t_type = request.form.get('type', '')
+
+        # ✅ Only income/expense are valid transaction types
+        if t_type not in ('income', 'expense'):
+            return redirect('/dashboard')
+
         source = request.form.get('source', '')
         desc = request.form.get('description', '')
         category = request.form.get('category', '') or auto_category(desc)
