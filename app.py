@@ -4029,6 +4029,17 @@ def transfer_wallet():
 
         return redirect('/wallet')
 
+    # 💱 FX-consistent conversion (fail closed): destination receives converted amount
+    dest_amount = convert_currency(
+        amount,
+        from_currency,
+        to_currency,
+        strict=True
+    )
+
+    if dest_amount is None:
+        return redirect('/wallet')
+
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -4073,11 +4084,11 @@ def transfer_wallet():
 
             return redirect('/wallet')
 
-        # Add to destination wallet
+        # Add to destination wallet (converted amount)
         update_wallet_balance(
             session['user_id'],
             to_currency,
-            amount,
+            dest_amount,
             "add",
             conn=conn
         )
@@ -4132,12 +4143,12 @@ def transfer_wallet():
                 """,
                 (
                     session['user_id'],
-                    amount,
+                    dest_amount,
                     to_currency,
                     "income",
                     "Transfer",
                     "Wallet",
-                    f"Received {amount} {to_currency} from {from_currency}"
+                    f"Received {dest_amount} {to_currency} from {from_currency}"
                 )
             )
 
@@ -4151,12 +4162,12 @@ def transfer_wallet():
                 """,
                 (
                     session['user_id'],
-                    amount,
+                    dest_amount,
                     to_currency,
                     "income",
                     "Transfer",
                     "Wallet",
-                    f"Received {amount} {to_currency} from {from_currency}"
+                    f"Received {dest_amount} {to_currency} from {from_currency}"
                 )
             )
 
