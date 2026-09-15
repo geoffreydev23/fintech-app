@@ -2286,6 +2286,43 @@ def dashboard():
 
     total_pages = (total_transactions + per_page - 1) // per_page
     has_next = page < total_pages
+
+    # 📊 AGGREGATION QUERY — ALL FILTERED ROWS (NO LIMIT/OFFSET)
+    agg_query = "SELECT amount, currency, type, category FROM transactions WHERE user_id="
+    agg_params = [session['user_id']]
+
+    if DATABASE_URL:
+        agg_query += "%s"
+    else:
+        agg_query += "?"
+
+    if filter_type:
+        if DATABASE_URL:
+            agg_query += " AND type=%s"
+        else:
+            agg_query += " AND type=?"
+        agg_params.append(filter_type)
+
+    if search:
+        search_value_agg = f"%{search}%"
+        if DATABASE_URL:
+            agg_query += """
+                AND (
+                    category ILIKE %s
+                    OR description ILIKE %s
+                )
+            """
+        else:
+            agg_query += """
+                AND (
+                    category LIKE ?
+                    OR description LIKE ?
+                )
+            """
+        agg_params.extend([search_value_agg, search_value_agg])
+
+    cur.execute(agg_query, tuple(agg_params))
+    aggregation_rows = cur.fetchall()
     # 🔔 GET NOTIFICATIONS
     if DATABASE_URL:
         cur.execute(
@@ -2384,32 +2421,32 @@ def dashboard():
     cur.close()
     conn.close()
 
-    # 💰 CALCULATIONS
+    # 💰 CALCULATIONS (full filtered history — NOT the paginated page)
     income = sum(
-        convert_currency(t[2], t[3], "KES")
-        for t in transactions
-        if t[4] == "income"
+        convert_currency(t[0], t[1], "KES")
+        for t in aggregation_rows
+        if t[2] == "income"
     )
 
     expenses = sum(
-        convert_currency(t[2], t[3], "KES")
-        for t in transactions
-        if t[4] == "expense"
+        convert_currency(t[0], t[1], "KES")
+        for t in aggregation_rows
+        if t[2] == "expense"
     )
 
     # ✅ USE REAL ACCOUNT BALANCE
     balance = real_balance
 
     category_data = {}
-    for t in transactions:
+    for t in aggregation_rows:
         converted_amount = convert_currency(
-            t[2],
-            t[3],
+            t[0],
+            t[1],
             "KES"
         )
 
-        category_data[t[5]] = (
-            category_data.get(t[5], 0)
+        category_data[t[3]] = (
+            category_data.get(t[3], 0)
             + converted_amount
         )
 
