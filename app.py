@@ -392,7 +392,7 @@ def auto_category(desc):
         return "Other"
     
 # 💱 LIVE CURRENCY CONVERSION
-def convert_currency(amount, from_currency, to_currency):
+def convert_currency(amount, from_currency, to_currency, strict=False):
 
     # ✅ SAME CURRENCY
     if from_currency == to_currency:
@@ -411,6 +411,11 @@ def convert_currency(amount, from_currency, to_currency):
         rate = rates.get(to_currency)
 
         if not rate:
+
+            # 🚫 STRICT MODE: fail closed, never fall back to 1:1
+            if strict:
+                return None
+
             return amount
 
         converted = amount * rate
@@ -420,6 +425,10 @@ def convert_currency(amount, from_currency, to_currency):
     except Exception as e:
 
         print("Conversion error:", e)
+
+        # 🚫 STRICT MODE: fail closed, never fall back to 1:1
+        if strict:
+            return None
 
         return amount
 
@@ -1854,12 +1863,18 @@ def convert_currency_wallet():
     if from_currency == to_currency:
         return redirect('/dashboard')
 
-    # 💱 CONVERT
+    # 💱 CONVERT (STRICT: no valid rate → fail closed, no 1:1 fallback)
     converted_amount = convert_currency(
         amount,
         from_currency,
-        to_currency
+        to_currency,
+        strict=True
     )
+
+    # 🚫 NO VALID RATE → abort before opening a connection,
+    #    before any wallet movement or ledger INSERT
+    if converted_amount is None:
+        return redirect('/dashboard')
 
     conn = get_db_connection()
     cur = conn.cursor()
