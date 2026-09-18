@@ -631,12 +631,32 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER,
                 amount REAL,
+                currency TEXT NOT NULL DEFAULT 'KES',
                 type TEXT,
                 category TEXT,
                 source TEXT,
-                description TEXT
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+
+        # ✅ K13: ADD CURRENCY COLUMN TO archived_transactions SAFELY (idempotent)
+        # Legacy archived rows receive the schema default 'KES'. The true
+        # currency of pre-K13 archive rows cannot be reconstructed.
+        try:
+            cur.execute(
+                "ALTER TABLE archived_transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'KES'"
+            )
+        except:
+            pass
+
+        # ✅ K13: ADD CREATED_AT COLUMN TO archived_transactions SAFELY (idempotent)
+        try:
+            cur.execute(
+                "ALTER TABLE archived_transactions ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+            )
+        except:
+            pass
 
         cur.execute('''
             CREATE TABLE IF NOT EXISTS notifications (
@@ -766,6 +786,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 amount REAL,
+                currency TEXT NOT NULL DEFAULT 'KES',
                 type TEXT,
                 category TEXT,
                 source TEXT,
@@ -773,6 +794,16 @@ def init_db():
                 created_at TEXT
             )
         ''')
+
+        # ✅ K13: ADD CURRENCY COLUMN TO archived_transactions SAFELY (idempotent)
+        # Legacy archived rows receive the schema default 'KES'. The true
+        # currency of pre-K13 archive rows cannot be reconstructed.
+        try:
+            cur.execute(
+                "ALTER TABLE archived_transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'KES'"
+            )
+        except:
+            pass
 
         cur.execute('''
             CREATE TABLE IF NOT EXISTS notifications (
@@ -1718,12 +1749,20 @@ def restore(id):
     # 🔍 GET ARCHIVED TRANSACTION
     if DATABASE_URL:
         cur.execute(
-            "SELECT * FROM archived_transactions WHERE id=%s AND user_id=%s",
+            """
+            SELECT id, user_id, amount, currency, type, category, source, description, created_at
+            FROM archived_transactions
+            WHERE id=%s AND user_id=%s
+            """,
             (id, session['user_id'])
         )
     else:
         cur.execute(
-            "SELECT * FROM archived_transactions WHERE id=? AND user_id=?",
+            """
+            SELECT id, user_id, amount, currency, type, category, source, description, created_at
+            FROM archived_transactions
+            WHERE id=? AND user_id=?
+            """,
             (id, session['user_id'])
         )
 
@@ -1731,76 +1770,105 @@ def restore(id):
 
     if t:
 
-        if DATABASE_URL:
+        # 🏷️ Unpack by explicit, named columns (no blind SELECT * indexing)
+        archived_user_id = t[1]
+        archived_amount = t[2]
+        archived_currency = t[3]
+        archived_type = t[4]
+        archived_category = t[5]
+        archived_source = t[6]
+        archived_description = t[7]
+        archived_created_at = t[8]
 
-            cur.execute(
-                """
-                INSERT INTO transactions
-                (
-                    user_id,
-                    amount,
-                    type,
-                    category,
-                    source,
-                    description,
-                    created_at
+        try:
+
+            if DATABASE_URL:
+
+                cur.execute(
+                    """
+                    INSERT INTO transactions
+                    (
+                        user_id,
+                        amount,
+                        currency,
+                        type,
+                        category,
+                        source,
+                        description,
+                        created_at
+                    )
+                    VALUES
+                    (%s,%s,%s,%s,%s,%s,%s,%s)
+                    """,
+                    (
+                        archived_user_id,
+                        archived_amount,
+                        archived_currency,
+                        archived_type,
+                        archived_category,
+                        archived_source,
+                        archived_description,
+                        archived_created_at
+                    )
                 )
-                VALUES
-                (%s,%s,%s,%s,%s,%s,%s)
-                """,
-                (
-                    t[1],
-                    t[2],
-                    t[3],
-                    t[4],
-                    t[5],
-                    t[6],
-                    t[7]
+
+                cur.execute(
+                    "DELETE FROM archived_transactions WHERE id=%s",
+                    (id,)
                 )
-            )
 
-            cur.execute(
-                "DELETE FROM archived_transactions WHERE id=%s",
-                (id,)
-            )
+            else:
 
-        else:
-
-            cur.execute(
-                """
-                INSERT INTO transactions
-                (
-                    user_id,
-                    amount,
-                    type,
-                    category,
-                    source,
-                    description,
-                    created_at
+                cur.execute(
+                    """
+                    INSERT INTO transactions
+                    (
+                        user_id,
+                        amount,
+                        currency,
+                        type,
+                        category,
+                        source,
+                        description,
+                        created_at
+                    )
+                    VALUES
+                    (?,?,?,?,?,?,?,?)
+                    """,
+                    (
+                        archived_user_id,
+                        archived_amount,
+                        archived_currency,
+                        archived_type,
+                        archived_category,
+                        archived_source,
+                        archived_description,
+                        archived_created_at
+                    )
                 )
-                VALUES
-                (?,?,?,?,?,?,?)
-                """,
-                (
-                    t[1],
-                    t[2],
-                    t[3],
-                    t[4],
-                    t[5],
-                    t[6],
-                    t[7]
+
+                cur.execute(
+                    "DELETE FROM archived_transactions WHERE id=?",
+                    (id,)
                 )
-            )
 
-            cur.execute(
-                "DELETE FROM archived_transactions WHERE id=?",
-                (id,)
-            )
+            conn.commit()
 
-        conn.commit()
+        except Exception as e:
 
-    cur.close()
-    conn.close()
+            conn.rollback()
+
+            print("RESTORE ERROR:", e)
+
+        finally:
+
+            cur.close()
+            conn.close()
+
+    else:
+
+        cur.close()
+        conn.close()
 
     return redirect('/archive')
 
