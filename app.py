@@ -252,31 +252,88 @@ def get_wallet_balance(user_id, currency, conn=None):
 
         if DATABASE_URL:
 
-            cur.execute(
-                """
-                INSERT INTO wallets
-                (user_id, currency, balance)
-                VALUES (%s,%s,%s)
-                """,
-                (user_id, currency, 0)
-            )
+            # 🛡️ SAVEPOINT so an expected duplicate-key conflict can be
+            #    recovered without aborting the caller's transaction
+            cur.execute("SAVEPOINT wallet_autocreate")
+
+            try:
+
+                cur.execute(
+                    """
+                    INSERT INTO wallets
+                    (user_id, currency, balance)
+                    VALUES (%s,%s,%s)
+                    """,
+                    (user_id, currency, 0)
+                )
+
+                cur.execute("RELEASE SAVEPOINT wallet_autocreate")
+
+                balance = 0
+
+            except psycopg2.IntegrityError as e:
+
+                # ❌ Recover ONLY the expected unique/duplicate-key conflict
+                if getattr(e, "pgcode", None) != "23505":
+                    raise
+
+                cur.execute("ROLLBACK TO SAVEPOINT wallet_autocreate")
+                cur.execute("RELEASE SAVEPOINT wallet_autocreate")
+
+                # 🔁 Concurrent request won the race — reuse that wallet
+                cur.execute(
+                    """
+                    SELECT balance
+                    FROM wallets
+                    WHERE user_id=%s
+                    AND currency=%s
+                    """,
+                    (user_id, currency)
+                )
+
+                raced = cur.fetchone()
+
+                balance = raced[0] if raced else 0
 
         else:
 
-            cur.execute(
-                """
-                INSERT INTO wallets
-                (user_id, currency, balance)
-                VALUES (?,?,?)
-                """,
-                (user_id, currency, 0)
-            )
+            try:
+
+                cur.execute(
+                    """
+                    INSERT INTO wallets
+                    (user_id, currency, balance)
+                    VALUES (?,?,?)
+                    """,
+                    (user_id, currency, 0)
+                )
+
+                balance = 0
+
+            except sqlite3.IntegrityError as e:
+
+                # ❌ Recover ONLY the expected unique/duplicate-key conflict
+                if "UNIQUE constraint failed" not in str(e):
+                    raise
+
+                # 🔁 Concurrent request won the race — reuse that wallet
+                cur.execute(
+                    """
+                    SELECT balance
+                    FROM wallets
+                    WHERE user_id=?
+                    AND currency=?
+                    """,
+                    (user_id, currency)
+                )
+
+                raced = cur.fetchone()
+
+                balance = raced[0] if raced else 0
 
         # 💾 Only the connection owner commits (standalone mode)
         if conn is None:
             own_conn.commit()
-
-        balance = 0
 
     else:
 
@@ -622,9 +679,40 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER,
                 currency TEXT,
-                balance REAL DEFAULT 0
+                balance REAL DEFAULT 0,
+                CONSTRAINT uq_wallets_user_currency UNIQUE (user_id, currency)
             )
         ''')
+
+        # ✅ K15: ENFORCE ONE WALLET PER (user_id, currency) — fail-closed, idempotent
+        # 1) Refuse to proceed if duplicate wallets already exist.
+        #    We never merge, delete, or rewrite balances.
+        cur.execute("""
+            SELECT user_id, currency, COUNT(*)
+            FROM wallets
+            GROUP BY user_id, currency
+            HAVING COUNT(*) > 1
+        """)
+        dup_wallets = cur.fetchall()
+
+        if dup_wallets:
+            raise RuntimeError(
+                "wallets contains duplicate (user_id, currency) rows: "
+                + str([(r[0], r[1], r[2]) for r in dup_wallets])
+                + ". Aborting K15 migration to prevent wallet data loss."
+            )
+
+        # 2) Add the named uniqueness protection only if it is not already present
+        cur.execute("""
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_wallets_user_currency'
+            UNION ALL
+            SELECT 1 FROM pg_indexes WHERE indexname = 'uq_wallets_user_currency'
+        """)
+        if not cur.fetchone():
+            cur.execute("""
+                ALTER TABLE wallets
+                ADD CONSTRAINT uq_wallets_user_currency UNIQUE (user_id, currency)
+            """)
 
         cur.execute('''
             CREATE TABLE IF NOT EXISTS archived_transactions (
@@ -761,9 +849,50 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 currency TEXT,
-                balance REAL DEFAULT 0
+                balance REAL DEFAULT 0,
+                UNIQUE(user_id, currency)
             )
         ''')
+
+        # ✅ K15: ENFORCE ONE WALLET PER (user_id, currency) — fail-closed, idempotent
+        # 1) Refuse to proceed if duplicate wallets already exist.
+        #    We never merge, delete, or rewrite balances.
+        cur.execute("""
+            SELECT user_id, currency, COUNT(*)
+            FROM wallets
+            GROUP BY user_id, currency
+            HAVING COUNT(*) > 1
+        """)
+        dup_wallets = cur.fetchall()
+
+        if dup_wallets:
+            raise RuntimeError(
+                "wallets contains duplicate (user_id, currency) rows: "
+                + str([(r[0], r[1], r[2]) for r in dup_wallets])
+                + ". Aborting K15 migration to prevent wallet data loss."
+            )
+
+        # 2) Is (user_id, currency) already uniquely indexed?
+        cur.execute("PRAGMA index_list(wallets)")
+        unique_covered = False
+
+        for idx in cur.fetchall():
+
+            if not idx[2]:
+                continue
+
+            cur.execute("PRAGMA index_info(" + idx[1] + ")")
+
+            if [c[2] for c in cur.fetchall()] == ["user_id", "currency"]:
+                unique_covered = True
+                break
+
+        # 3) Add the named unique index only when it is genuinely missing
+        if not unique_covered:
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_wallets_user_currency
+                ON wallets (user_id, currency)
+            """)
 
         # ✅ ADD CURRENCY COLUMN SAFELY
         try:
