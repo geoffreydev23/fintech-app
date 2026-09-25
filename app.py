@@ -665,7 +665,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS transactions (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER,
-                amount REAL,
+                amount DECIMAL(10,2) NOT NULL CHECK(amount > 0),
                 currency TEXT DEFAULT 'KES',
                 type TEXT,
                 category TEXT,
@@ -679,7 +679,7 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER,
                 currency TEXT,
-                balance REAL DEFAULT 0,
+                balance NUMERIC(15,2) NOT NULL DEFAULT 0.0 CHECK(balance >= 0),
                 CONSTRAINT uq_wallets_user_currency UNIQUE (user_id, currency)
             )
         ''')
@@ -718,7 +718,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS archived_transactions (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER,
-                amount REAL,
+                amount DECIMAL(10,2) NOT NULL CHECK(amount > 0),
                 currency TEXT NOT NULL DEFAULT 'KES',
                 type TEXT,
                 category TEXT,
@@ -745,6 +745,80 @@ def init_db():
             )
         except:
             pass
+
+        # ✅ K17: ENFORCE positive transaction amounts — fail-closed, idempotent
+        # 1) Refuse to proceed if any stored amount already violates the rule.
+        #    We never delete, merge, or rewrite financial records.
+        for k17_table in ("transactions", "archived_transactions"):
+
+            cur.execute(
+                "SELECT id, user_id, amount FROM " + k17_table
+                + " WHERE amount IS NULL OR amount <= 0"
+            )
+
+            k17_invalid = cur.fetchall()
+
+            if k17_invalid:
+                raise RuntimeError(
+                    k17_table + " contains rows with NULL or non-positive amounts: "
+                    + str([(r[0], r[1], r[2]) for r in k17_invalid][:20])
+                    + ". Aborting K17 migration to prevent financial data loss."
+                )
+
+        # 2) Add the named constraints only when genuinely missing.
+        #    NOT NULL is applied with the CHECK because a NULL amount would
+        #    otherwise pass CHECK(amount > 0) (NULL comparisons are unknown).
+        for k17_table, k17_name in (
+            ("transactions", "ck_transactions_amount_positive"),
+            ("archived_transactions", "ck_archived_transactions_amount_positive"),
+        ):
+
+            cur.execute(
+                "SELECT 1 FROM pg_constraint WHERE conname = %s",
+                (k17_name,)
+            )
+
+            if cur.fetchone():
+                continue
+
+            cur.execute(
+                "ALTER TABLE " + k17_table + " ALTER COLUMN amount SET NOT NULL"
+            )
+
+            cur.execute(
+                "ALTER TABLE " + k17_table
+                + " ADD CONSTRAINT " + k17_name + " CHECK (amount > 0)"
+            )
+
+        # ✅ K19: ENFORCE non-negative wallet balances — fail-closed, idempotent
+        # 1) Refuse to proceed if any stored balance already violates the rule.
+        cur.execute(
+            "SELECT id, user_id, currency, balance FROM wallets"
+            " WHERE balance IS NULL OR balance < 0"
+        )
+
+        k19_invalid = cur.fetchall()
+
+        if k19_invalid:
+            raise RuntimeError(
+                "wallets contains rows with NULL or negative balances: "
+                + str([(r[0], r[1], r[2], r[3]) for r in k19_invalid][:20])
+                + ". Aborting K19 migration to prevent wallet data loss."
+            )
+
+        # 2) Add the named constraint only when genuinely missing
+        cur.execute(
+            "SELECT 1 FROM pg_constraint WHERE conname = 'ck_wallets_balance_nonnegative'"
+        )
+
+        if not cur.fetchone():
+            cur.execute(
+                "ALTER TABLE wallets ALTER COLUMN balance SET NOT NULL"
+            )
+            cur.execute(
+                "ALTER TABLE wallets ADD CONSTRAINT ck_wallets_balance_nonnegative"
+                " CHECK (balance >= 0)"
+            )
 
         cur.execute('''
             CREATE TABLE IF NOT EXISTS notifications (
@@ -834,7 +908,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                amount REAL,
+                amount REAL NOT NULL CHECK(amount > 0),
                 currency TEXT DEFAULT 'KES',
                 type TEXT,
                 category TEXT,
@@ -849,7 +923,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 currency TEXT,
-                balance REAL DEFAULT 0,
+                balance REAL NOT NULL DEFAULT 0 CHECK(balance >= 0),
                 UNIQUE(user_id, currency)
             )
         ''')
@@ -894,6 +968,78 @@ def init_db():
                 ON wallets (user_id, currency)
             """)
 
+        # ✅ K19: ENFORCE non-negative wallet balances — fail-closed, idempotent
+        # SQLite cannot add a CHECK to an existing table, so the table is
+        # rebuilt only once the stored data has been proven valid.
+        cur.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='wallets'"
+        )
+
+        k19_schema = cur.fetchone()
+        k19_schema = k19_schema[0] if k19_schema else ""
+
+        # Whitespace is fully collapsed so the probe is not defeated by
+        # formatting ("CHECK(balance >= 0)" vs "check(balance>=0)").
+        k19_flat = "".join(k19_schema.split()).lower()
+
+        if "check(balance>=0)" not in k19_flat:
+
+            # 1) Refuse to proceed if any stored balance already violates the rule
+            cur.execute("""
+                SELECT id, user_id, currency, balance
+                FROM wallets
+                WHERE balance IS NULL OR balance < 0
+            """)
+
+            k19_invalid = cur.fetchall()
+
+            if k19_invalid:
+                raise RuntimeError(
+                    "wallets contains rows with NULL or negative balances: "
+                    + str([(r[0], r[1], r[2], r[3]) for r in k19_invalid][:20])
+                    + ". Aborting K19 migration to prevent wallet data loss."
+                )
+
+            # 2) Rebuild with the constraint, preserving every existing row
+            #    (the inline UNIQUE keeps K15's one-wallet-per-currency rule)
+            try:
+
+                cur.execute("DROP TABLE IF EXISTS wallets_k19_new")
+
+                cur.execute('''
+                    CREATE TABLE wallets_k19_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
+                        currency TEXT,
+                        balance REAL NOT NULL DEFAULT 0 CHECK(balance >= 0),
+                        UNIQUE(user_id, currency)
+                    )
+                ''')
+
+                cur.execute("""
+                    INSERT INTO wallets_k19_new (id, user_id, currency, balance)
+                    SELECT id, user_id, currency, balance FROM wallets
+                """)
+
+                cur.execute("DROP TABLE wallets")
+                cur.execute("ALTER TABLE wallets_k19_new RENAME TO wallets")
+
+                # ✅ K15 is preserved across the rebuild: dropping the old table
+                # also dropped its named index, so it is re-asserted here.
+                cur.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_wallets_user_currency
+                    ON wallets (user_id, currency)
+                """)
+
+            except Exception:
+
+                try:
+                    cur.execute("DROP TABLE IF EXISTS wallets_k19_new")
+                except Exception:
+                    pass
+
+                raise
+
         # ✅ ADD CURRENCY COLUMN SAFELY
         try:
             cur.execute(
@@ -914,7 +1060,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS archived_transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                amount REAL,
+                amount REAL NOT NULL CHECK(amount > 0),
                 currency TEXT NOT NULL DEFAULT 'KES',
                 type TEXT,
                 category TEXT,
@@ -933,6 +1079,121 @@ def init_db():
             )
         except:
             pass
+
+        # ✅ K17: ENFORCE positive transaction amounts — fail-closed, idempotent
+        # SQLite cannot add a CHECK constraint to an existing table, so any
+        # legacy table is rebuilt only after its stored amounts are proven
+        # valid. We never delete, repair, or rewrite financial records.
+        for k17_table in ("transactions", "archived_transactions"):
+
+            cur.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+                (k17_table,)
+            )
+
+            k17_row = cur.fetchone()
+            k17_schema = k17_row[0] if k17_row else ""
+
+            # Skip when the table does not exist yet (CREATE TABLE above already
+            # created it with the constraint) or when the positive-amount rule
+            # is already enforced. Whitespace is collapsed so the probe is not
+            # defeated by formatting ("CHECK(amount > 0)" vs "check(amount>0)").
+            if not k17_schema:
+                continue
+
+            if "check(amount>0)" in "".join(k17_schema.split()).lower():
+                continue
+
+            # 1) Refuse to proceed if any stored amount already violates the rule
+            cur.execute(
+                "SELECT id, user_id, amount FROM " + k17_table
+                + " WHERE amount IS NULL OR amount <= 0"
+            )
+
+            k17_invalid = cur.fetchall()
+
+            if k17_invalid:
+                raise RuntimeError(
+                    k17_table + " contains rows with NULL or non-positive amounts: "
+                    + str([(r[0], r[1], r[2]) for r in k17_invalid][:20])
+                    + ". Aborting K17 migration to prevent financial data loss."
+                )
+
+            # 2) Inspect the real column set so the rebuild is faithful on any
+            #    legacy shape instead of assuming the modern schema.
+            cur.execute("PRAGMA table_info(" + k17_table + ")")
+            k17_present = [r[1] for r in cur.fetchall()]
+
+            for k17_required in ("id", "user_id", "amount"):
+                if k17_required not in k17_present:
+                    raise RuntimeError(
+                        k17_table + " is missing the required column "
+                        + k17_required
+                        + ". Aborting K17 migration to prevent financial data loss."
+                    )
+
+            k17_defs = {
+                "id": "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                "user_id": "user_id INTEGER",
+                "amount": "amount REAL NOT NULL CHECK(amount > 0)",
+                # K13 is preserved: archive rows keep NOT NULL DEFAULT 'KES'
+                "currency": (
+                    "currency TEXT NOT NULL DEFAULT 'KES'"
+                    if k17_table == "archived_transactions"
+                    else "currency TEXT DEFAULT 'KES'"
+                ),
+                "type": "type TEXT",
+                "category": "category TEXT",
+                "source": "source TEXT",
+                "description": "description TEXT",
+                "created_at": "created_at TEXT",
+            }
+
+            k17_order = (
+                "id", "user_id", "amount", "currency", "type",
+                "category", "source", "description", "created_at"
+            )
+
+            # created_at is always carried over: "transactions" receives it from
+            # the ALTER above and "archived_transactions" is given it here so
+            # K13's explicit-column restore always has the column available.
+            k17_keep = [
+                c for c in k17_order
+                if c in k17_present or c == "created_at"
+            ]
+
+            k17_new = k17_table + "_k17_new"
+
+            try:
+
+                cur.execute("DROP TABLE IF EXISTS " + k17_new)
+
+                cur.execute(
+                    "CREATE TABLE " + k17_new + " ("
+                    + ", ".join(k17_defs[c] for c in k17_keep)
+                    + ")"
+                )
+
+                cur.execute(
+                    "INSERT INTO " + k17_new + " ("
+                    + ", ".join(k17_keep) + ") SELECT "
+                    + ", ".join(
+                        c if c in k17_present else "NULL" for c in k17_keep
+                    )
+                    + " FROM " + k17_table
+                )
+
+                cur.execute("DROP TABLE " + k17_table)
+                cur.execute("ALTER TABLE " + k17_new + " RENAME TO " + k17_table)
+
+            except Exception:
+
+                try:
+                    cur.execute("DROP TABLE IF EXISTS " + k17_new)
+                except Exception:
+                    pass
+
+                raise
 
         cur.execute('''
             CREATE TABLE IF NOT EXISTS notifications (
