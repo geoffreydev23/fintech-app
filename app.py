@@ -627,6 +627,138 @@ def generate_savings_goal(income, expenses):
         "progress": round(progress, 2)
     }
 
+
+# 🧭 REPORTING CLASSIFICATION CONTRACT (K22)
+# Pure classification helpers establishing the unified reporting contract across
+# all FinFlow surfaces. All helpers work transparently across dicts, sqlite3.Row,
+# and positional tuples/lists, and fail closed on missing/unknown/invalid data.
+
+def _extract_movement_kind_and_type(transaction):
+    """Return ``(movement_kind, type)`` as strings for any transaction shape.
+
+    Works transparently across dicts, sqlite3.Row (any mapping with ``keys``),
+    positional tuples/lists of the known ledger arities, and attribute objects.
+    Missing, invalid or unknown data fails closed to ``(None, None)``.
+    """
+    if transaction is None:
+        return None, None
+    if hasattr(transaction, "keys") and callable(transaction.keys):
+        mk = transaction.get("movement_kind") if hasattr(transaction, "get") else None
+        if mk is None:
+            try:
+                mk = transaction["movement_kind"]
+            except (KeyError, IndexError, TypeError):
+                mk = None
+        ttype = transaction.get("type") if hasattr(transaction, "get") else None
+        if ttype is None:
+            try:
+                ttype = transaction["type"]
+            except (KeyError, IndexError, TypeError):
+                ttype = None
+        return (str(mk) if mk is not None else None), (str(ttype) if ttype is not None else None)
+    if isinstance(transaction, (tuple, list)):
+        if len(transaction) == 10:
+            return (str(transaction[9]) if transaction[9] is not None else None), (str(transaction[4]) if transaction[4] is not None else None)
+        if len(transaction) == 8:
+            return (str(transaction[7]) if transaction[7] is not None else None), (str(transaction[3]) if transaction[3] is not None else None)
+        if len(transaction) == 5:
+            return (str(transaction[4]) if transaction[4] is not None else None), (str(transaction[2]) if transaction[2] is not None else None)
+        if len(transaction) == 3:
+            return (str(transaction[2]) if transaction[2] is not None else None), (str(transaction[1]) if transaction[1] is not None else None)
+        if len(transaction) == 2:
+            return (str(transaction[0]) if transaction[0] is not None else None), (str(transaction[1]) if transaction[1] is not None else None)
+        if len(transaction) == 9:
+            return None, (str(transaction[4]) if transaction[4] is not None else None)
+    if hasattr(transaction, "movement_kind") or hasattr(transaction, "type"):
+        mk = getattr(transaction, "movement_kind", None)
+        ttype = getattr(transaction, "type", None)
+        return (str(mk) if mk is not None else None), (str(ttype) if ttype is not None else None)
+    return None, None
+
+
+def _extract_category(transaction):
+    """Return the raw ``category`` value for any transaction shape.
+
+    Normalization is deliberately left to :func:`get_transaction_category`;
+    this helper only locates the field and fails closed to ``None``.
+    """
+    if transaction is None:
+        return None
+    if hasattr(transaction, "keys") and callable(transaction.keys):
+        cat = transaction.get("category") if hasattr(transaction, "get") else None
+        if cat is None:
+            try:
+                cat = transaction["category"]
+            except (KeyError, IndexError, TypeError):
+                cat = None
+        return cat
+    if isinstance(transaction, (tuple, list)):
+        if len(transaction) == 10:
+            return transaction[5]
+        if len(transaction) == 8:
+            return transaction[4]
+        if len(transaction) == 5:
+            return transaction[3]
+        if len(transaction) == 4:
+            return transaction[3]
+    if hasattr(transaction, "category"):
+        return getattr(transaction, "category", None)
+    return None
+
+
+def is_cashflow_income(transaction):
+    """True only for real money entering the user's finances (external_in,
+
+    or an explicit ``user_record`` income). Internal transfers, conversions,
+    unknown and invalid data are never income.
+    """
+    mk, ttype = _extract_movement_kind_and_type(transaction)
+    if mk == "external_in":
+        return True
+    if mk == "user_record" and ttype == "income":
+        return True
+    return False
+
+
+def is_cashflow_expense(transaction):
+    """True only for real money leaving the user's finances (external_out,
+
+    or an explicit ``user_record`` expense). Internal transfers, conversions,
+    unknown and invalid data are never expenses.
+    """
+    mk, ttype = _extract_movement_kind_and_type(transaction)
+    if mk == "external_out":
+        return True
+    if mk == "user_record" and ttype == "expense":
+        return True
+    return False
+
+
+def is_cashflow_excluded(transaction):
+    """True for ledger movements that never affect cash flow totals.
+
+    Only ``internal`` (wallet-to-wallet / wallet-to-user) and ``conversion``
+    movements are excluded; unknown or invalid data fails closed to False.
+    """
+    mk, _ = _extract_movement_kind_and_type(transaction)
+    return mk in ("internal", "conversion")
+
+
+def get_transaction_category(transaction):
+    """Return the display category, normalized to a non-empty trimmed string.
+
+    Missing, blank, whitespace-only and non-string categories collapse to the
+    ``"Other"`` bucket so every reporting surface shows the same label.
+    """
+    raw = _extract_category(transaction)
+    if raw is None:
+        return "Other"
+    if not isinstance(raw, str):
+        raw = str(raw)
+    trimmed = raw.strip()
+    return trimmed if trimmed else "Other"
+
+
 # 🗄️ INIT DB
 def init_db():
     conn = get_db_connection()
@@ -670,7 +802,16 @@ def init_db():
                 type TEXT,
                 category TEXT,
                 source TEXT,
-                description TEXT
+                description TEXT,
+                movement_kind TEXT NOT NULL DEFAULT 'unknown'
+                    CHECK (movement_kind IN (
+                        'external_in',
+                        'external_out',
+                        'internal',
+                        'conversion',
+                        'user_record',
+                        'unknown'
+                    ))
             )
         ''')
 
@@ -724,7 +865,16 @@ def init_db():
                 category TEXT,
                 source TEXT,
                 description TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                movement_kind TEXT NOT NULL DEFAULT 'unknown'
+                    CHECK (movement_kind IN (
+                        'external_in',
+                        'external_out',
+                        'internal',
+                        'conversion',
+                        'user_record',
+                        'unknown'
+                    ))
             )
         ''')
 
@@ -745,6 +895,42 @@ def init_db():
             )
         except:
             pass
+
+        # ✅ K21: ADD MOVEMENT_KIND COLUMN SAFELY (idempotent)
+        # Authoritative movement kind for the ledger. Legacy rows receive the
+        # schema default 'unknown': a historical movement kind is never guessed
+        # from description text and never inferred from category/source.
+        for k21_table in ("transactions", "archived_transactions"):
+            try:
+                cur.execute(
+                    "ALTER TABLE " + k21_table + " ADD COLUMN movement_kind TEXT"
+                    " NOT NULL DEFAULT 'unknown'"
+                )
+            except:
+                pass
+
+        # The six-value vocabulary is enforced with a named constraint added only
+        # when genuinely missing — the same fail-closed, idempotent shape used by
+        # K15/K17/K19. A NULL-safe CHECK passes on every legacy row ('unknown').
+        for k21_table, k21_name in (
+            ("transactions", "ck_transactions_movement_kind"),
+            ("archived_transactions", "ck_archived_transactions_movement_kind"),
+        ):
+
+            cur.execute(
+                "SELECT 1 FROM pg_constraint WHERE conname = %s",
+                (k21_name,)
+            )
+
+            if cur.fetchone():
+                continue
+
+            cur.execute(
+                "ALTER TABLE " + k21_table
+                + " ADD CONSTRAINT " + k21_name
+                + " CHECK (movement_kind IN ('external_in', 'external_out',"
+                + " 'internal', 'conversion', 'user_record', 'unknown'))"
+            )
 
         # ✅ K17: ENFORCE positive transaction amounts — fail-closed, idempotent
         # 1) Refuse to proceed if any stored amount already violates the rule.
@@ -914,7 +1100,16 @@ def init_db():
                 category TEXT,
                 source TEXT,
                 description TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                movement_kind TEXT NOT NULL DEFAULT 'unknown'
+                    CHECK (movement_kind IN (
+                        'external_in',
+                        'external_out',
+                        'internal',
+                        'conversion',
+                        'user_record',
+                        'unknown'
+                    ))
             )
         ''')
 
@@ -1056,6 +1251,22 @@ def init_db():
         except:
             pass
 
+        # ✅ K21: ADD MOVEMENT_KIND COLUMN SAFELY (idempotent)
+        # Authoritative movement kind for the ledger. Legacy rows are marked
+        # 'unknown' by the schema default: a historical movement kind is never
+        # guessed from description text and never inferred from category/source.
+        # This runs before the K17 rebuild below so a legacy table that also
+        # lacks the positive-amount rule carries the column through that rebuild.
+        try:
+            cur.execute(
+                "ALTER TABLE transactions ADD COLUMN movement_kind TEXT"
+                " NOT NULL DEFAULT 'unknown'"
+                " CHECK (movement_kind IN ('external_in', 'external_out',"
+                " 'internal', 'conversion', 'user_record', 'unknown'))"
+            )
+        except:
+            pass
+
         cur.execute('''
             CREATE TABLE IF NOT EXISTS archived_transactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1066,7 +1277,16 @@ def init_db():
                 category TEXT,
                 source TEXT,
                 description TEXT,
-                created_at TEXT
+                created_at TEXT,
+                movement_kind TEXT NOT NULL DEFAULT 'unknown'
+                    CHECK (movement_kind IN (
+                        'external_in',
+                        'external_out',
+                        'internal',
+                        'conversion',
+                        'user_record',
+                        'unknown'
+                    ))
             )
         ''')
 
@@ -1076,6 +1296,20 @@ def init_db():
         try:
             cur.execute(
                 "ALTER TABLE archived_transactions ADD COLUMN currency TEXT NOT NULL DEFAULT 'KES'"
+            )
+        except:
+            pass
+
+        # ✅ K21: ADD MOVEMENT_KIND COLUMN TO archived_transactions SAFELY (idempotent)
+        # Legacy archived rows are marked 'unknown'. /restore copies the archived
+        # value verbatim, so an archive that never recorded a kind restores as
+        # 'unknown' rather than having one invented for it.
+        try:
+            cur.execute(
+                "ALTER TABLE archived_transactions ADD COLUMN movement_kind TEXT"
+                " NOT NULL DEFAULT 'unknown'"
+                " CHECK (movement_kind IN ('external_in', 'external_out',"
+                " 'internal', 'conversion', 'user_record', 'unknown'))"
             )
         except:
             pass
@@ -1147,11 +1381,19 @@ def init_db():
                 "source": "source TEXT",
                 "description": "description TEXT",
                 "created_at": "created_at TEXT",
+                # K21 is preserved through the rebuild: the authoritative
+                # movement kind travels with its six-value vocabulary intact.
+                "movement_kind": (
+                    "movement_kind TEXT NOT NULL DEFAULT 'unknown'"
+                    " CHECK (movement_kind IN ('external_in', 'external_out',"
+                    " 'internal', 'conversion', 'user_record', 'unknown'))"
+                ),
             }
 
             k17_order = (
                 "id", "user_id", "amount", "currency", "type",
-                "category", "source", "description", "created_at"
+                "category", "source", "description", "created_at",
+                "movement_kind"
             )
 
             # created_at is always carried over: "transactions" receives it from
@@ -1376,8 +1618,8 @@ def deposit():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
@@ -1386,7 +1628,8 @@ def deposit():
                     "income",
                     "Deposit",
                     "External",
-                    f"Deposited {amount} KES"
+                    f"Deposited {amount} KES",
+                    "external_in"
                 )
             )
 
@@ -1395,8 +1638,8 @@ def deposit():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -1405,7 +1648,8 @@ def deposit():
                     "income",
                     "Deposit",
                     "External",
-                    f"Deposited {amount} KES"
+                    f"Deposited {amount} KES",
+                    "external_in"
                 )
             )
 
@@ -1475,8 +1719,8 @@ def withdraw():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     session['user_id'],
@@ -1485,7 +1729,8 @@ def withdraw():
                     "expense",
                     "Withdrawal",
                     "External",
-                    f"Withdrawal of Ksh {amount}"
+                    f"Withdrawal of Ksh {amount}",
+                    "external_out"
                 )
             )
 
@@ -1494,8 +1739,8 @@ def withdraw():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session['user_id'],
@@ -1504,7 +1749,8 @@ def withdraw():
                     "expense",
                     "Withdrawal",
                     "External",
-                    f"Withdrawal of Ksh {amount}"
+                    f"Withdrawal of Ksh {amount}",
+                    "external_out"
                 )
             )
 
@@ -1636,8 +1882,8 @@ def send_money():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, type, category, source, description)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                (user_id, amount, type, category, source, description, movement_kind)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     session['user_id'],
@@ -1645,15 +1891,16 @@ def send_money():
                     "expense",
                     "Transfer",
                     "Wallet",
-                    f"Sent money to {receiver_username}"
+                    f"Sent money to {receiver_username}",
+                    "external_out"
                 )
             )
         else:
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, type, category, source, description)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (user_id, amount, type, category, source, description, movement_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session['user_id'],
@@ -1661,7 +1908,8 @@ def send_money():
                     "expense",
                     "Transfer",
                     "Wallet",
-                    f"Sent money to {receiver_username}"
+                    f"Sent money to {receiver_username}",
+                    "external_out"
                 )
             )
 
@@ -1670,8 +1918,8 @@ def send_money():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, type, category, source, description)
-                VALUES (%s, %s, %s, %s, %s, %s)
+                (user_id, amount, type, category, source, description, movement_kind)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     receiver_id,
@@ -1679,15 +1927,16 @@ def send_money():
                     "income",
                     "Transfer",
                     "Wallet",
-                    f"Received money from {sender_username}"
+                    f"Received money from {sender_username}",
+                    "external_in"
                 )
             )
         else:
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, type, category, source, description)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (user_id, amount, type, category, source, description, movement_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     receiver_id,
@@ -1695,7 +1944,8 @@ def send_money():
                     "income",
                     "Transfer",
                     "Wallet",
-                    f"Received money from {sender_username}"
+                    f"Received money from {sender_username}",
+                    "external_in"
                 )
             )
 
@@ -1762,8 +2012,8 @@ def mpesa():
             conn.cursor().execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     user_id,
@@ -1773,14 +2023,15 @@ def mpesa():
                     "M-Pesa",
                     "M-Pesa",
                     f"M-Pesa deposit of Ksh {amount}",
+                    "external_in",
                 ),
             )
         else:
             conn.cursor().execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -1790,6 +2041,7 @@ def mpesa():
                     "M-Pesa",
                     "M-Pesa",
                     f"M-Pesa deposit of Ksh {amount}",
+                    "external_in",
                 ),
             )
 
@@ -2140,7 +2392,7 @@ def restore(id):
     if DATABASE_URL:
         cur.execute(
             """
-            SELECT id, user_id, amount, currency, type, category, source, description, created_at
+            SELECT id, user_id, amount, currency, type, category, source, description, created_at, movement_kind
             FROM archived_transactions
             WHERE id=%s AND user_id=%s
             """,
@@ -2149,7 +2401,7 @@ def restore(id):
     else:
         cur.execute(
             """
-            SELECT id, user_id, amount, currency, type, category, source, description, created_at
+            SELECT id, user_id, amount, currency, type, category, source, description, created_at, movement_kind
             FROM archived_transactions
             WHERE id=? AND user_id=?
             """,
@@ -2169,6 +2421,21 @@ def restore(id):
         archived_source = t[6]
         archived_description = t[7]
         archived_created_at = t[8]
+        archived_movement_kind = t[9]
+
+        # 🧭 K21: the archived movement kind is preserved verbatim. An archive
+        # row that never recorded a kind (or carries a value outside the
+        # six-value vocabulary) restores as 'unknown' — never guessed from the
+        # description, category or source.
+        if archived_movement_kind not in (
+            "external_in",
+            "external_out",
+            "internal",
+            "conversion",
+            "user_record",
+            "unknown"
+        ):
+            archived_movement_kind = "unknown"
 
         try:
 
@@ -2185,10 +2452,11 @@ def restore(id):
                         category,
                         source,
                         description,
-                        created_at
+                        created_at,
+                        movement_kind
                     )
                     VALUES
-                    (%s,%s,%s,%s,%s,%s,%s,%s)
+                    (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """,
                     (
                         archived_user_id,
@@ -2198,7 +2466,8 @@ def restore(id):
                         archived_category,
                         archived_source,
                         archived_description,
-                        archived_created_at
+                        archived_created_at,
+                        archived_movement_kind
                     )
                 )
 
@@ -2220,10 +2489,11 @@ def restore(id):
                         category,
                         source,
                         description,
-                        created_at
+                        created_at,
+                        movement_kind
                     )
                     VALUES
-                    (?,?,?,?,?,?,?,?)
+                    (?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         archived_user_id,
@@ -2233,7 +2503,8 @@ def restore(id):
                         archived_category,
                         archived_source,
                         archived_description,
-                        archived_created_at
+                        archived_created_at,
+                        archived_movement_kind
                     )
                 )
 
@@ -2357,8 +2628,8 @@ def convert_currency_wallet():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     session['user_id'],
@@ -2367,15 +2638,16 @@ def convert_currency_wallet():
                     "expense",
                     "Conversion",
                     "Wallet",
-                    f"Converted to {to_currency}"
+                    f"Converted to {to_currency}",
+                    "conversion"
                 )
             )
         else:
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (?,?,?,?,?,?,?)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (?,?,?,?,?,?,?,?)
                 """,
                 (
                     session['user_id'],
@@ -2384,7 +2656,8 @@ def convert_currency_wallet():
                     "expense",
                     "Conversion",
                     "Wallet",
-                    f"Converted to {to_currency}"
+                    f"Converted to {to_currency}",
+                    "conversion"
                 )
             )
 
@@ -2393,8 +2666,8 @@ def convert_currency_wallet():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (%s,%s,%s,%s,%s,%s,%s)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     session['user_id'],
@@ -2403,15 +2676,16 @@ def convert_currency_wallet():
                     "income",
                     "Conversion",
                     "Wallet",
-                    f"Converted from {from_currency}"
+                    f"Converted from {from_currency}",
+                    "conversion"
                 )
             )
         else:
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (?,?,?,?,?,?,?)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (?,?,?,?,?,?,?,?)
                 """,
                 (
                     session['user_id'],
@@ -2420,7 +2694,8 @@ def convert_currency_wallet():
                     "income",
                     "Conversion",
                     "Wallet",
-                    f"Converted from {from_currency}"
+                    f"Converted from {from_currency}",
+                    "conversion"
                 )
             )
 
@@ -2521,9 +2796,9 @@ def dashboard():
                 cur.execute(
                     """
                     INSERT INTO transactions
-                    (user_id, amount, currency, type, category, source, description)
+                    (user_id, amount, currency, type, category, source, description, movement_kind)
 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         session['user_id'],
@@ -2532,16 +2807,17 @@ def dashboard():
                         t_type,
                         category,
                         source,
-                        desc
+                        desc,
+                        "user_record"
                     )
                 )
             else:
                 cur.execute(
                     """
                     INSERT INTO transactions
-                    (user_id, amount, currency, type, category, source, description)
+                    (user_id, amount, currency, type, category, source, description, movement_kind)
 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         session['user_id'],
@@ -2550,7 +2826,8 @@ def dashboard():
                         t_type,
                         category,
                         source,
-                        desc
+                        desc,
+                        "user_record"
                     )
                 )
 
@@ -2746,7 +3023,7 @@ def dashboard():
     has_next = page < total_pages
 
     # 📊 AGGREGATION QUERY — ALL FILTERED ROWS (NO LIMIT/OFFSET)
-    agg_query = "SELECT amount, currency, type, category FROM transactions WHERE user_id="
+    agg_query = "SELECT amount, currency, type, category, movement_kind FROM transactions WHERE user_id="
     agg_params = [session['user_id']]
 
     if DATABASE_URL:
@@ -2880,31 +3157,37 @@ def dashboard():
     conn.close()
 
     # 💰 CALCULATIONS (full filtered history — NOT the paginated page)
+    # 🧭 K22: headline totals use the shared reporting contract so internal
+    # transfers, conversions and unknown history never inflate income/expenses.
     income = sum(
         convert_currency(t[0], t[1], "KES")
         for t in aggregation_rows
-        if t[2] == "income"
+        if is_cashflow_income(t)
     )
 
     expenses = sum(
         convert_currency(t[0], t[1], "KES")
         for t in aggregation_rows
-        if t[2] == "expense"
+        if is_cashflow_expense(t)
     )
 
     # ✅ USE REAL ACCOUNT BALANCE
     balance = real_balance
 
     category_data = {}
+    # 🧭 K22: spending categories collect genuine cashflow expenses only.
     for t in aggregation_rows:
+        if not is_cashflow_expense(t):
+            continue
         converted_amount = convert_currency(
             t[0],
             t[1],
             "KES"
         )
 
-        category_data[t[3]] = (
-            category_data.get(t[3], 0)
+        category = get_transaction_category(t)
+        category_data[category] = (
+            category_data.get(category, 0)
             + converted_amount
         )
 
@@ -3173,18 +3456,19 @@ def analytics():
 
         amount = float(t['amount'])
 
-        if t['type'] == "income":
+        # 🧭 K22: headline totals come from the shared reporting contract.
+        # Internal transfers and currency conversions (and unknown history)
+        # are neither income nor expenses, so they never reach either total,
+        # and category spending only ever collects cashflow expenses.
+        if is_cashflow_income(t):
 
             income += amount
 
-        else:
+        elif is_cashflow_expense(t):
 
             expenses += amount
 
-            category = t['category']
-
-            if not category:
-                category = "Other"
+            category = get_transaction_category(t)
 
             if category not in category_data:
                 category_data[category] = 0
@@ -3273,14 +3557,18 @@ def analytics():
 
         amount = float(t['amount'])
 
-        if t['type'] == "income":
+        # 🧭 K22: the monthly series uses the same cashflow classification as
+        # the headline totals. Rows that are neither cashflow income nor
+        # cashflow expense (internal, conversion, unknown) are not plotted at
+        # all rather than being defaulted into the expense series.
+        if is_cashflow_income(t):
 
             if month not in monthly_income:
                 monthly_income[month] = 0
 
             monthly_income[month] += amount
 
-        else:
+        elif is_cashflow_expense(t):
 
             if month not in monthly_expenses:
                 monthly_expenses[month] = 0
@@ -3477,15 +3765,20 @@ def export_analytics_pdf():
 
         amount = float(t['amount'])
 
-        if t['type'] == "income":
+        # 🧭 K22: headline totals and category spending follow the shared
+        # reporting contract. Internal transfers, currency conversions and
+        # unknown history are neither income nor expenses, and spending
+        # categories only ever collect cashflow expenses (with blank
+        # categories normalized by the shared helper).
+        if is_cashflow_income(t):
 
             income += amount
 
-        else:
+        elif is_cashflow_expense(t):
 
             expenses += amount
 
-            category = t['category'] or "Other"
+            category = get_transaction_category(t)
 
             if category not in category_data:
                 category_data[category] = 0
@@ -3519,14 +3812,16 @@ def export_analytics_pdf():
 
         amount = float(t["amount"])
 
-        if t["type"] == "income":
+        # 🧭 K22: the monthly series use the same cashflow contract, so
+        # excluded movements contribute to neither series.
+        if is_cashflow_income(t):
 
             monthly_income[month] = (
                 monthly_income.get(month, 0)
                 + amount
             )
 
-        else:
+        elif is_cashflow_expense(t):
 
             monthly_expenses[month] = (
                 monthly_expenses.get(month, 0)
@@ -3549,6 +3844,33 @@ def export_analytics_pdf():
         monthly_expenses.get(month, 0)
         for month in months
     ]
+
+    # -----------------------------
+    # CREATE PDF
+    # -----------------------------
+    # The document, the styles and - crucially - the story list are created
+    # here, before the first story section below, so every one of them is
+    # initialized before any possible use.
+
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(buffer)
+
+
+    from datetime import datetime
+
+    styles = getSampleStyleSheet()
+
+    title_style = styles["Heading1"]
+    title_style.alignment = TA_CENTER
+    title_style.textColor = colors.HexColor("#22c55e")
+
+    subtitle_style = styles["Heading2"]
+    subtitle_style.alignment = TA_CENTER
+
+    normal = styles["BodyText"]
+
+    story = []
 
     # -----------------------------
     # CREATE MONTHLY LINE CHART
@@ -3613,6 +3935,9 @@ def export_analytics_pdf():
         )
 
         plt.close()
+
+        # close the handle so Windows allows the final os.remove()
+        line_file.close()
 
         story.append(
             Paragraph(
@@ -3802,30 +4127,6 @@ def export_analytics_pdf():
         )
 
     
-
-    # -----------------------------
-    # CREATE PDF
-    # -----------------------------
-
-    buffer = BytesIO()
-
-    doc = SimpleDocTemplate(buffer)
-
-
-    from datetime import datetime
-
-    styles = getSampleStyleSheet()
-
-    title_style = styles["Heading1"]
-    title_style.alignment = TA_CENTER
-    title_style.textColor = colors.HexColor("#22c55e")
-
-    subtitle_style = styles["Heading2"]
-    subtitle_style.alignment = TA_CENTER
-
-    normal = styles["BodyText"]
-
-    story = []
 
     # -----------------------------
     # REPORT HEADER
@@ -4318,6 +4619,9 @@ def export_analytics_pdf():
 
         plt.close()
 
+        # close the handle so Windows allows the final os.remove()
+        pie_file.close()
+
         story.append(
             Paragraph(
                 "<b>📊 Spending by Category</b>",
@@ -4557,8 +4861,8 @@ def transfer_wallet():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     session['user_id'],
@@ -4567,7 +4871,8 @@ def transfer_wallet():
                     "expense",
                     "Transfer",
                     "Wallet",
-                    f"Transferred {amount} {from_currency} to {to_currency}"
+                    f"Transferred {amount} {from_currency} to {to_currency}",
+                    "internal"
                 )
             )
 
@@ -4576,8 +4881,8 @@ def transfer_wallet():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session['user_id'],
@@ -4586,7 +4891,8 @@ def transfer_wallet():
                     "expense",
                     "Transfer",
                     "Wallet",
-                    f"Transferred {amount} {from_currency} to {to_currency}"
+                    f"Transferred {amount} {from_currency} to {to_currency}",
+                    "internal"
                 )
             )
 
@@ -4596,8 +4902,8 @@ def transfer_wallet():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     session['user_id'],
@@ -4606,7 +4912,8 @@ def transfer_wallet():
                     "income",
                     "Transfer",
                     "Wallet",
-                    f"Received {dest_amount} {to_currency} from {from_currency}"
+                    f"Received {dest_amount} {to_currency} from {from_currency}",
+                    "internal"
                 )
             )
 
@@ -4615,8 +4922,8 @@ def transfer_wallet():
             cur.execute(
                 """
                 INSERT INTO transactions
-                (user_id, amount, currency, type, category, source, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (user_id, amount, currency, type, category, source, description, movement_kind)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session['user_id'],
@@ -4625,7 +4932,8 @@ def transfer_wallet():
                     "income",
                     "Transfer",
                     "Wallet",
-                    f"Received {dest_amount} {to_currency} from {from_currency}"
+                    f"Received {dest_amount} {to_currency} from {from_currency}",
+                    "internal"
                 )
             )
 
@@ -4703,13 +5011,18 @@ def chat():
 
         amount = float(t['amount'])
 
-        if t['type'] == "income":
+        # 🧭 K22: the chat financial summary follows the shared reporting
+        # contract. Internal transfers, currency conversions and unknown
+        # history are neither income nor expenses, and spending categories
+        # only ever collect cashflow expenses (blank categories normalized
+        # by the shared helper).
+        if is_cashflow_income(t):
             income += amount
 
-        else:
+        elif is_cashflow_expense(t):
             expenses += amount
 
-            category = t['category']
+            category = get_transaction_category(t)
 
             if category not in category_data:
                 category_data[category] = 0
