@@ -350,9 +350,18 @@ CHAT_REPORTING_SURFACE = {"chat"}
 # migrated Dashboard contract is pinned in tests/test_dashboard_reporting.py.
 DASHBOARD_REPORTING_SURFACE = {"dashboard"}
 
+# Post-migration hardening (a separate, later change - not part of the K21/K22
+# classification migration): the password-reset path turned a successful request
+# into a 500 on a cp1252 console because send_email()/request_reset() print
+# emoji, and export_analytics() wrote its PDF into the working directory instead
+# of streaming it. Those three baseline functions are declared touchable here so
+# 0h keeps failing on every *other* baseline function, and their fixed behaviour
+# is pinned in tests/test_account_and_data.py.
+HARDENING_FIXES = {"send_email", "request_reset", "export_analytics"}
+
 TOUCHABLE = (WRITERS | {"init_db"} | ANALYTICS_SURFACE
              | PDF_REPORTING_SURFACE | CHAT_REPORTING_SURFACE
-             | DASHBOARD_REPORTING_SURFACE)
+             | DASHBOARD_REPORTING_SURFACE | HARDENING_FIXES)
 
 
 def normalized_source(text):

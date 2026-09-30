@@ -88,10 +88,16 @@ EXCLUDED_AMOUNTS = 1676.0           # internal + conversion + unknown
 # Dashboard; those surfaces are declared in K22_MIGRATED_SURFACES below instead
 # of being dropped from the guard.
 UNTOUCHED_BY_THIS_PHASE = (
-    "export_analytics",
     "transactions", "export_transactions", "wallet", "archive",
     "get_wallet_balance", "update_wallet_balance", "convert_currency",
 )
+
+# `export_analytics` left the untouched set in the post-migration hardening
+# change: the endpoint used to write analytics_report.pdf into the working
+# directory and send_file() that path; it now builds the same report into an
+# in-memory buffer and streams it (like export_analytics_pdf always did). Its
+# fixed contract is pinned in tests/test_account_and_data.py.
+HARDENED_SURFACES = ("export_analytics",)
 
 # Exactly which surfaces are allowed to carry the K22 helpers. Phase 2
 # migrated Analytics, Phase 3 the PDF export, Phase 4 the Chat summary and

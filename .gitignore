@@ -9,5 +9,6 @@ finflow.db
 # Dead / placeholder files kept on disk but not committed
 templates/index_backup.html
 static/css/app.css
+static/css/dashboard.css
 static/js/dashboard.js
 static/js/notifications.js

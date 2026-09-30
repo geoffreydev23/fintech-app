@@ -13,6 +13,7 @@ from flask import (
 
 import sqlite3
 import os
+import sys
 import secrets
 import random
 import smtplib
@@ -92,6 +93,18 @@ except:
 
 app = Flask(__name__)
 
+# 🖥️ LOG STREAMS: a log line must never be able to fail a request. The email
+# path prints emoji, and on a cp1252 console (the Windows default) those prints
+# raise UnicodeEncodeError inside the request - turning a successful password
+# reset request into a 500 after the OTP had already been stored. Reconfigure
+# the streams once at import time; the guarded fallback keeps this a no-op on
+# any stream that does not support reconfiguration.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 app.secret_key = "super_secret_key_change_this"
 
 # 🔐 SESSION SECURITY
@@ -112,11 +125,11 @@ FROM_EMAIL = os.getenv("FROM_EMAIL")  # must match verified sender
 # 📧 SEND EMAIL FUNCTION (SENDGRID API - SAFE + IMPROVED)
 def send_email(to_email, subject, message):
     if not SENDGRID_API_KEY:
-        print("❌ Missing SENDGRID_API_KEY")
+        print("[!] Missing SENDGRID_API_KEY")
         return False
 
     if not FROM_EMAIL:
-        print("❌ Missing FROM_EMAIL")
+        print("[!] Missing FROM_EMAIL")
         return False
 
     try:
@@ -151,21 +164,21 @@ def send_email(to_email, subject, message):
 
         # ✅ SUCCESS
         if response.status_code in [200, 202]:
-            print("✅ Email sent successfully")
+            print("[ok] Email sent successfully")
             return True
 
         # ❌ FAILURE (detailed log)
-        print("❌ SendGrid error:")
+        print("[!] SendGrid error:")
         print("Status Code:", response.status_code)
         print("Response Body:", response.text)
         return False
 
     except requests.exceptions.Timeout:
-        print("❌ SendGrid timeout (network issue)")
+        print("[!] SendGrid timeout (network issue)")
         return False
 
     except Exception as e:
-        print("❌ Email exception:", str(e))
+        print("[!] Email exception:", str(e))
         return False  # 🚨 NEVER crash your app
 
 # 🔐 SAFE API KEY
@@ -2121,7 +2134,7 @@ This will expire in 10 minutes.
             email_sent = send_email(email, "Password Reset - Fintech App", message)
 
             if not email_sent:
-                print("⚠️ Email failed, but continuing...")
+                print("[!] Email failed, but continuing...")
 
         # ✅ CLOSE CONNECTION (only once, outside condition)
         cur.close()
@@ -4669,9 +4682,13 @@ def export_analytics():
     if 'user_id' not in session:
         return redirect('/login')
 
-    filename = "analytics_report.pdf"
+    # 🧵 IN-MEMORY: the same report, streamed instead of written to disk. The
+    # old version dropped analytics_report.pdf into the working directory on
+    # every call (leftovers, a race between users, and a 500 when the cwd was
+    # not writable).
+    buf = BytesIO()
 
-    pdf = SimpleDocTemplate(filename)
+    pdf = SimpleDocTemplate(buf)
 
     styles = getSampleStyleSheet()
 
@@ -4695,9 +4712,13 @@ def export_analytics():
 
     pdf.build(content)
 
+    buf.seek(0)
+
     return send_file(
-        filename,
-        as_attachment=True
+        buf,
+        as_attachment=True,
+        download_name="analytics_report.pdf",
+        mimetype="application/pdf"
     )
 
 # 💳 WALLET PAGE
